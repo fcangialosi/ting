@@ -8,7 +8,9 @@ CookieAuthentication 1
 DataDirectory /Users/fcangialosi/Applications/TorBrowser.app/Contents/Resources/Data/Tor
 DirPort 9030
 DirReqStatistics 0
+DownloadExtraInfo 1
 GeoIPFile ../../Contents/Resources/Data/Tor/geoip
+FetchUselessDescriptors 1
 Log notice stdout
 SocksListenAddress 127.0.0.1
 SocksPort 9050
