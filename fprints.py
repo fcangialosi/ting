@@ -39,7 +39,7 @@ try:
     for desc in downloader.get_server_descriptors().run():
         extra = downloader.get_extrainfo_descriptors(str(desc.fingerprint)).run()
         location = extra[0].geoip_db_digest
-        bluepill = desc.exit_policy.can_exit_to("128.8.126.92", 80)
+        bluepill = desc.exit_policy.can_exit_to("128.8.126.92", 8080)
         #singlehop = desc.allow_single_hop_exits
         
         relay_info = "Nickname: %s; Fingerprint: %s; Bluepill?: %s; Location: %s; " % (desc.nickname, desc.fingerprint, bluepill, location)
