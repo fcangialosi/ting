@@ -1,3 +1,9 @@
+#!/usr/bin/evn python
+
+#
+# Created by Frank Cangialosi on 12/6/13.
+#
+
 import time
 import socket
 import socks 
@@ -5,9 +11,12 @@ from stem import CircStatus, OperationFailed, InvalidRequest, InvalidArguments
 from stem.control import Controller, EventType
 from pprint import pprint
 import sys
+from random import choice
+import os
+import subprocess
 
 TCP_IP = '128.8.126.92' # bluepill ip
-TCP_PORT = 8080 # port bluepill is listening on
+TCP_PORT = 8081 # port bluepill is listening on
 BUFFER_SIZE = 1024 # arbitrary
 SOCKS_HOST = "127.0.0.1" # localhost                                            
 SOCKS_PORT = 9050 # port connecting with tor socks
@@ -21,7 +30,7 @@ def attach_stream(event):
         controller.attach_stream(event.id, cid)
     except (OperationFailed, InvalidRequest), error:
         print type(cid)
-        if str(error) in (('Unknown circuit %d' % cid), "Can't attach stream to non-open " + "origin circuit"):
+        if str(error) in (('Unknown circuit %s' % cid), "Can't attach stream to non-open " + "origin circuit"):
             # If circuit is already closed, close stream too.
             controller.close_stream(event.id)
         else:
@@ -43,18 +52,62 @@ def check_for_circuit(relay_a,relay_b):
             return circ.id
     return -1
 
+def check_params():
+    for arg in sys.argv:
+        if arg == "-r":
+            return True
+    return False
+
+def get_valid_nodes():
+    files = os.listdir(".")
+    exits = []
+    for name in files:
+        if name == "exit_nodes.txt":
+            print "Found list of active relays!"
+            f = open(name)
+            exits = f.readlines()
+            f.close()
+    if not exits:
+        print "Could not find list of active relays"
+        print "Downloading active relay info"
+        print "....."
+        cmd = ['python', 'fprints.py']
+        p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
+        for line in p.stdout:
+            print line
+        p.wait()
+        print "Download complete!"
+        f = open(name)
+        exits = f.readlines()
+        f.close()
+    return exits
+
+############################################################
+############################################################
+
+# Look for any command line arguments
+random = check_params()
+
 # Connect to Stem controller, set configs, and authenticate 
 controller = Controller.from_port(port = CONTROLLER_PORT)
 controller.authenticate()
 controller.set_conf("__DisablePredictedCircuits", "1")
 controller.set_conf("__LeaveStreamsUnattached", "1")
 
-# Create circuit from given relays, or find cid of old one 
-#    if cicuit with same relays already exists
-print "Note that BOTH nodes must be exit relays"
-relay_a = raw_input("Name or fingerprint of first relay: ")
-relay_b = raw_input("Name or fingerprint of second relay: ")
-print "\n"
+if random:
+    exits = get_valid_nodes()
+    relay_a = choice(exits)
+    relay_b = choice(exits)
+    while (relay_a == relay_b):
+        relay_b = choice(exits)
+    print "Chose relays %s and %s" % (relay_a, relay_b)
+else:
+    # Create circuit from given relays, or find cid of old one 
+    #    if cicuit with same relays already exists
+    print "Note that BOTH nodes must be exit relays"
+    relay_a = raw_input("Name or fingerprint of first relay: ")
+    relay_b = raw_input("Name or fingerprint of second relay: ")
+    print "\n"
 result = check_for_circuit(relay_a,relay_b)
 if result is -1:
     cid = controller.new_circuit([relay_a,relay_b])
