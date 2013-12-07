@@ -14,6 +14,7 @@ import sys
 from random import choice
 import os
 import subprocess
+from pprint import pprint 
 
 TCP_IP = '128.8.126.92' # bluepill ip
 TCP_PORT = 8081 # port bluepill is listening on
@@ -109,6 +110,7 @@ else:
     relay_b = raw_input("Name or fingerprint of second relay: ")
     print "\n"
 result = check_for_circuit(relay_a,relay_b)
+print result
 if result is -1:
     cid = controller.new_circuit([relay_a,relay_b])
 else:
