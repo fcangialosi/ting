@@ -35,13 +35,15 @@ if verbose:
     print "                  ACTIVE RELAY INFO                           "
     print "--------------------------------------------------------------"
     
-try:
-    for desc in downloader.get_server_descriptors().run():
+
+for desc in downloader.get_server_descriptors().run():
+    try:
         extra = downloader.get_extrainfo_descriptors(str(desc.fingerprint)).run()
         location = extra[0].geoip_db_digest
         bluepill = desc.exit_policy.can_exit_to("128.8.126.92", 8080)
-        #singlehop = desc.allow_single_hop_exits
-        
+        singlehop = desc.allow_single_hop_exits
+        if singlehop:
+          print "WHOA WTF!!!"
         relay_info = "Nickname: %s; Fingerprint: %s; Bluepill?: %s; Location: %s; " % (desc.nickname, desc.fingerprint, bluepill, location)
         exit_policy = "Exit Policy details: $%s" % (desc.exit_policy)
         if verbose:
@@ -57,15 +59,15 @@ try:
         
         if verbose:
             print "--------------------------------------------------------------"
+    except Exception as exc:
+        print "Unable to retrieve the consensus: %s" % exc
+    finally:
+        f1.close
+        f2.close
 
-except Exception as exc:
-    print "Unable to retrieve the consensus: %s" % exc
 
-finally:
-    f1.close
-    f2.close
-    print "Found ", len(non_exit_nodes), " total non-exit nodes."
-    print "Found ", len(exit_nodes), "total exit nodes."
+print "Found ", len(non_exit_nodes), " total non-exit nodes."
+print "Found ", len(exit_nodes), "total exit nodes."
 
 
 
