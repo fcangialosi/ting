@@ -56,9 +56,7 @@ def attach_stream(event):
 
 # An event listener, called whenever StreamEvent status changes
 def probe_stream(event):
-    if event.status == 'CLOSED':
-        print event
-    elif event.status == 'NEW' and event.purpose == 'USER':
+    if event.status == 'NEW' and event.purpose == 'USER':
         attach_stream(event)
 
 # Check list of circuits to see if one with the exist same relays already exists
@@ -83,12 +81,12 @@ def get_stats(rtt):
     _max = numpy.max(np)*1000
     _med = numpy.median(np)*1000
     _std = numpy.std(np)*1000
-    return [_avg,_min,_max,_med,_std]
+    return [_avg,_min,_max,_std]
 
 # Given two arrays with the same length, subtracts all elements in b from a
 def subtract_arrays(a,b):
     for i in range(len(a)):
-        a[i] -= a[i]
+        a[i] -= b[i]
     return a
 
 def choose_relays(controller):
@@ -184,7 +182,6 @@ def ting(t, sock):
         sock.connect((TCP_IP, TCP_PORT))
         for i in range(NUM_PINGS):
             # Name of the exit relay that bluepill will connect to
-            controller.get_streams()[0].circ_id
             MESSAGE = str(controller.get_circuit(curr_cid).path[0][1])
             print '{0} bytes to {1}: ping_num={2}'.format(BUFFER_SIZE,TCP_IP,i)
             # Take measurement of time when message is sent
@@ -252,5 +249,10 @@ print "======== Pinging Sub Circuit (Y,Z) ========"
 print "==========================================="
 t_yz = ting(syzd, sock)
 print t_yz
+
+t_xy = subtract_arrays(subtract_arrays(t_total,t_wx),t_yz) 
+
+print "======== Final AVG/MIN/MAX/STD ========"
+print t_xy
 
 
