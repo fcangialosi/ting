@@ -92,21 +92,22 @@ def subtract_arrays(a,b):
 def choose_relays(controller):
     while True:
         try:
-            relay_w = choice(exits)
+            relays = exits.keys()
+            relay_w = choice(relays)
             while (relay_w == 'Unnamed'):
-                relay_w = choice(exits)
+                relay_w = choice(relays)
 
-            relay_x = choice(exits)
+            relay_x = choice(relays)
             while (relay_w == relay_x or relay_x == 'Unnamed'):
-                relay_x = choice(exits)
+                relay_x = choice(relays)
 
-            relay_y = choice(exits)
+            relay_y = choice(relays)
             while(relay_y == relay_w or relay_y == relay_x or relay_y == 'Unnamed'):
-                relay_y = choice(exits)
+                relay_y = choice(relays)
     
-            relay_z = choice(exits)
+            relay_z = choice(relays)
             while(relay_z == relay_w or relay_z == relay_x or relay_z == relay_y or relay_z == 'Unnamed'):
-                relay_z = choice(exits)
+                relay_z = choice(relays)
 
             print "Trying W,X,Y,Z: %s, %s, %s, %s" % (relay_w, relay_x, relay_y, relay_z)
             
@@ -152,13 +153,14 @@ def ping(ip):
 
 def get_valid_nodes():
     files = os.listdir(".")
-    exits = []
+    exits = {}
     for name in files:
         if name == "exits.txt":
             print "Found list of active relays!"
             f = open(name)
             for line in f.readlines():
-                exits.append(line.strip().split()[0])
+                relay = line.strip().split()
+                exits[relay[0]] = relay[1]
             f.close()
     if not exits:
         print "Could not find list of exit nodes"
@@ -172,23 +174,23 @@ def get_valid_nodes():
         print "Download complete!"
         f = open(name)
         for line in f.readlines():
-            exits.append(line.strip().split()[0])
+            relay = line.strip().split()
+            exits[relay[0]] = relay[1]
         f.close()
     return exits
 
-def ting(t, sock):
+def ting(t, sock, msg):
     # Connect to bluepill server at port 8080
     try:
         sock.connect((TCP_IP, TCP_PORT))
         for i in range(NUM_PINGS):
             # Name of the exit relay that bluepill will connect to
-            MESSAGE = str(controller.get_circuit(curr_cid).path[0][1])
             print '{0} bytes to {1}: ping_num={2}'.format(BUFFER_SIZE,TCP_IP,i)
             # Take measurement of time when message is sent
             start_time = time.time()
 
             # Send name of exit node to bluepill 
-            sock.send(MESSAGE)
+            sock.send(msg)
 
             # Store data recieved from bluepill
             data = sock.recv(BUFFER_SIZE)
@@ -198,7 +200,7 @@ def ting(t, sock):
             t[i] = (end_time-start_time)
         sock.close()
 
-        return get_stats(t)
+        return get_stats(t), data
     except TypeError as exc:
         print "Failed to conect using the given circuit.", exc
 
@@ -222,22 +224,44 @@ listen = controller.add_event_listener(probe_stream, EventType.STREAM)
 
 sock = setup_proxy()
 
+print exits[relays[1]]
 print "======================================"
-print "======== Pinging Full Circuit ========"
+print "======== Tinging Full Circuit ========"
 print "======================================"
-t_total = ting(swxyzd, sock)
+t_total, results = ting(swxyzd, sock, exits[relays[1]])
 print t_total
+print results
 
+print "======================================"
+print "========== Pinging W from S =========="
+print "======================================"
+r_sw = ping(exits[relays[0]])
+print r_sw
+
+print "==== Waiting for bluepill to finish ping from D to X"
+time.sleep(30)
+
+print exits[relays[3]]
 global curr_cid 
 curr_cid = sub_one
 controller.remove_event_listener(listen)
 listen = controller.add_event_listener(probe_stream, EventType.STREAM)
 sock = setup_proxy()
 print "==========================================="
-print "======== Pinging Sub Circuit (W,X) ========"
+print "======== Tinging Sub Circuit (W,X) ========"
 print "==========================================="
-t_wx = ting(swxd, sock)
+t_wx, results = ting(swxd, sock, exits[relays[3]])
 print t_wx
+print results
+
+print "======================================"
+print "========== Pinging Y from S =========="
+print "======================================"
+r_sy = ping(exits[relays[0]])
+print r_sy
+
+print "==== Waiting for bluepill to finish ping from D to Z"
+time.sleep(30)
 
 global curr_cid
 curr_cid = sub_two
@@ -245,10 +269,11 @@ controller.remove_event_listener(listen)
 listen = controller.add_event_listener(probe_stream, EventType.STREAM)
 sock = setup_proxy()
 print "==========================================="
-print "======== Pinging Sub Circuit (Y,Z) ========"
+print "======== Tinging Sub Circuit (Y,Z) ========"
 print "==========================================="
-t_yz = ting(syzd, sock)
+t_yz,results = ting(syzd, sock, "empty")
 print t_yz
+print results
 
 t_xy = subtract_arrays(subtract_arrays(t_total,t_wx),t_yz) 
 
