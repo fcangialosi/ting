@@ -47,7 +47,7 @@ try:
                 if a['href'] and 'router_detail' in a['href']:
                     name = a.text.encode('ascii', 'replace')
                     fp = a['href'][21:]
-            f.write("%s %s\n" % (name,fp))
+            f.write("%s %s %s\n" % (name,ip,fp))
 finally:
     f.close
     print '==========================================='
