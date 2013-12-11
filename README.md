@@ -41,3 +41,11 @@ Run ting with
 By default, it will choose 4 random valid exit nodes from the scrape_exits list.
 
 More advanced command line options specifying nodes and other parameters to come. 
+
+To compile the writeup, run:
+	pdflatex writeup.tex
+	bibtex writeup
+	pdflatex writeup.tex
+	pdflatex writeup.tex
+
+The resulting article will be stored in writeup.pdf.
