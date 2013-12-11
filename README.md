@@ -18,14 +18,26 @@ Usage
 -----
 Patch tor using the patch files from TOR-RTT
 
+Download the csv of all valid tor exit nodes from torstatus.blutmagie.de and place it in the repos root directory
+
+Run
+
+		python scrape_exits.py
+
 Check the given torrc file, and make any necessary changes to directories or ports
 
 Start tor in the repos root directory by running:
 
 		tor -f torrc
 
-Open up client.py, and verify the that the ports at the top match the ports tor and socks are using on your system
+Open up ting.py, and verify the that the ports at the top match the ports tor and socks are using on your system
 
 Run server.py on your server (e.g. bluepill.cs.umd.edu)
 
-Run client.py on your local machine. When asked, enter the name of two tor exit nodes, which can be found on http://torstatus.blutmagie.de
+Run ting with
+
+		python ting
+
+By default, it will choose 4 random valid exit nodes from the scrape_exits list.
+
+More advanced command line options specifying nodes and other parameters to come. 
