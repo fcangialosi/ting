@@ -2,7 +2,6 @@
 # The old torrc file was renamed to torrc.orig.1 or similar, and Tor will ignore it
 
 AvoidDiskWrites 1
-AllowSingleHopExits 1
 ControlPort 9051
 CookieAuthentication 1
 DataDirectory /Users/fcangialosi/Applications/TorBrowser.app/Contents/Resources/Data/Tor
