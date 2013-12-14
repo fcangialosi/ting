@@ -76,12 +76,12 @@ def check_for_circuit(relays):
 # Computes typical ping stats for a given array of ting times
 def get_stats(rtt):
     np = array(rtt)
-    _avg = numpy.mean(np)*1000
-    _min = numpy.min(np)*1000
-    _max = numpy.max(np)*1000
-    _med = numpy.median(np)*1000
-    _std = numpy.std(np)*1000
-    return [_avg,_min,_max,_std]
+    _avg = numpy.mean(np)
+    _min = numpy.min(np)
+    _max = numpy.max(np)
+    _med = numpy.median(np)
+    _std = numpy.std(np)
+    return [_avg,_min,_max,_med,_std]
 
 # Given two arrays with the same length, subtracts all elements in b from a
 def subtract_arrays(a,b):
@@ -149,14 +149,17 @@ def create_circuit(relays):
 
 # Given an ip or address, uses standard ping, and returns a 4-element array of the min,avg,max,stddev
 def ping(ip):
-    regex = re.compile("(\d+.\d+)")
+    pings = []
+    regex = re.compile("(\d+.\d+) ms")
     cmd = ['ping', '-c',str(NUM_PINGS),ip]
     p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
-    line = p.stdout.readlines()[-1]
-    print line
-    stats = regex.findall(line)
+    for line in p.stdout.readlines():
+        ping = regex.findall(line)
+        if ping != []:
+            pings.append(int(float(ping[0])))
     p.wait()
-    return stats
+    pings = pings[:-1]
+    return pings
 
 def get_valid_nodes():
     files = os.listdir(".")
@@ -216,8 +219,6 @@ def ting(t, sock):
 ############################################################
 ############################################################
 
-
-
 # Connect to Stem controller, set configs, and authenticate 
 controller = Controller.from_port(port = CONTROLLER_PORT)
 controller.authenticate()
@@ -225,90 +226,111 @@ controller.set_conf("__DisablePredictedCircuits", "1")
 controller.set_conf("__LeaveStreamsUnattached", "1")
 
 exits = get_valid_nodes()
+while 1:
+    try:
+        # Choose 4 node circuit of W, X, Y, and Z
+        relays = choose_relays(controller)
 
-# Choose 4 node circuit of W, X, Y, and Z
-relays = choose_relays(controller)
+        print "== Connecting to Bluepill"
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((TCP_IP, TCP_PORT))
+        print "== Sending IP of X to Bluepill"
+        s.send(exits[relays[1]])
+        print "Waiting for ping results..."
+        dpings = s.recv(BUFFER_SIZE)
+        regex = re.compile("(\d+.\d+)")
+        temp = regex.findall(dpings)
+        r_xd = []
+        for x in temp:
+            r_xd.append(int(float(x)))
+        print "R_XD", r_xd
+        print "== Recieved ping results from Bluepill"
+        print "==\n==\n=="
+        print '--- ting statistics ---'
+        print NUM_PINGS, 'packets transmitted'
+        print 'rtt avg/min/max/med/stddev =', get_stats(r_xd)
+        s.close()
 
-print "== Connecting to Bluepill"
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((TCP_IP, TCP_PORT))
-print "== Sending IP of X to Bluepill"
-s.send(exits[relays[1]])
-print "Waiting for ping results..."
-stats = s.recv(BUFFER_SIZE)
-regex = re.compile("(\d+.\d+)")
-r_xd = regex.findall(stats)
-print "== Recieved ping results from Bluepill"
-print "==\n==\n=="
-print '--- ting statistics ---'
-print NUM_PINGS, 'packets transmitted'
-print 'rtt avg/min/max/stddev =', r_xd
-s.close()
+        # Add stream prober 
+        listen = controller.add_event_listener(probe_stream, EventType.STREAM)
 
-# Add stream prober 
-listen = controller.add_event_listener(probe_stream, EventType.STREAM)
+        sock = setup_proxy()
 
-sock = setup_proxy()
+        print "============================================="
+        print "======== Tinging D with Full Circuit ========"
+        print "============================================="
+        t_total = ting(swxyzd, sock)
+        print "T_total", t_total
+        print '--- ting statistics ---'
+        print NUM_PINGS, 'packets transmitted'
+        print 'rtt avg/min/max/med/stddev =', get_stats(t_total)
 
-print "============================================="
-print "======== Tinging D with Full Circuit ========"
-print "============================================="
-t_total = ting(swxyzd, sock)
-print '--- ting statistics ---'
-print NUM_PINGS, 'packets transmitted'
-print 'rtt avg/min/max/stddev =', get_stats(t_total)
+        global curr_cid 
+        curr_cid = sub_one
+        controller.remove_event_listener(listen)
+        listen = controller.add_event_listener(probe_stream, EventType.STREAM)
+        sock = setup_proxy()
+        print "=================================================="
+        print "======== Tinging D with Sub Circuit (W,X) ========"
+        print "=================================================="
+        t_wx = ting(swxd, sock)
+        print "T_WX", t_wx
+        print '--- ting statistics ---'
+        print NUM_PINGS, 'packets transmitted'
+        print 'rtt avg/min/max/med/stddev =', get_stats(t_wx)
 
-global curr_cid 
-curr_cid = sub_one
-controller.remove_event_listener(listen)
-listen = controller.add_event_listener(probe_stream, EventType.STREAM)
-sock = setup_proxy()
-print "=================================================="
-print "======== Tinging D with Sub Circuit (W,X) ========"
-print "=================================================="
-t_wx = ting(swxd, sock)
-print '--- ting statistics ---'
-print NUM_PINGS, 'packets transmitted'
-print 'rtt avg/min/max/stddev =', get_stats(t_wx)
+        global curr_cid
+        curr_cid = sub_two
+        controller.remove_event_listener(listen)
+        listen = controller.add_event_listener(probe_stream, EventType.STREAM)
+        sock = setup_proxy()
+        print "=================================================="
+        print "======== Tinging D with Sub Circuit (Y,Z) ========"
+        print "=================================================="
+        t_yz = ting(syzd, sock)
+        print "T_YZ", t_yz
+        print '--- ting statistics ---'
+        print NUM_PINGS, 'packets transmitted'
+        print 'rtt avg/min/max/med/stddev =', get_stats(t_yz)
 
-global curr_cid
-curr_cid = sub_two
-controller.remove_event_listener(listen)
-listen = controller.add_event_listener(probe_stream, EventType.STREAM)
-sock = setup_proxy()
-print "=================================================="
-print "======== Tinging D with Sub Circuit (Y,Z) ========"
-print "=================================================="
-t_yz = ting(syzd, sock)
-print '--- ting statistics ---'
-print NUM_PINGS, 'packets transmitted'
-print 'rtt avg/min/max/stddev =', get_stats(t_yz)
+        sock = setup_proxy()
+        print "=================================="
+        print "======== Pinging Y from S ========"
+        print "=================================="
+        r_sy = ping(exits[relays[1]])
+        print "R_SY", r_sy
+        print '--- ping statistics ---'
+        print NUM_PINGS, 'packets transmitted'
+        print 'rtt avg/min/max/med/stddev =', get_stats(r_sy)
 
-sock = setup_proxy()
-print "=================================="
-print "======== Pinging Y from S ========"
-print "=================================="
-r_sy = ping(exits[relays[1]])
-print '--- ping statistics ---'
-print NUM_PINGS, 'packets transmitted'
-print 'rtt avg/min/max/stddev =', r_sy
+        t_xy = subtract_arrays(subtract_arrays(t_total,t_wx),t_yz) 
+        print t_xy
+        temp = []
+        for x in t_xy:
+            temp.append(x*1000)
+        t_xy = add_arrays(add_arrays(temp,r_sy),r_xd)
+        print t_xy
 
-t_xy = subtract_arrays(subtract_arrays(t_total,t_wx),t_yz) 
-t_xy = get_stats(t_xy)
-print t_xy
-t_xy = add_arrays(add_arrays(t_xy,r_sy),r_xd)
 
-for num in t_xy:
-    round(num,5)
+        t_xy = get_stats(temp)
+        print t_xy
 
-print "\n...\n"
-print "--- Ting between {0} and {1} ---".format(relays[1],relays[2])
-print "rtt avg/min/max/stddev", t_xy
+        print "\n...\n"
+        print "--- Ting between {0} and {1} ---".format(relays[1],relays[2])
+        print "rtt avg/min/max/stddev", t_xy
 
-f = open("ting_data.txt", "a")
-f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
-f.write("--- Ting between {0} and {1} ---\n".format(relays[1],relays[2]))
-f.write("RTT: avg/min/max/stddev ")
-f.write(t_xy)
-f.write("\n")
-f.close()
+        f = open("ting_data.txt", "a")
+        f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
+        f.write("--- Ting between {0} and {1} ---\n".format(relays[1],relays[2]))
+        f.write("RTT: avg/min/max/stddev ")
+        f.write(str(t_xy))
+        f.write("\n")
+        f.close()
+    except KeyboardInterrupt as exc:
+        print exc
+        print "Exiting safely."
+        break
+    except Exception as e:
+        print e
+        print "====== Error occured! Trying new circuit." 
+
