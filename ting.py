@@ -23,7 +23,7 @@ import re
 
 TCP_IP = '128.8.126.92' # bluepill ip
 TCP_PORT = 8080 # port bluepill is listening on
-BUFFER_SIZE = 64 # arbitrary
+BUFFER_SIZE = 128 # arbitrary
 SOCKS_HOST = "127.0.0.1" # localhost                                            
 SOCKS_PORT = 9050 # port connecting with tor socks
 SOCKS_TYPE = socks.PROXY_TYPE_SOCKS5
@@ -320,9 +320,9 @@ while 1:
         print "rtt avg/min/max/stddev", t_xy
 
         f = open("ting_data.txt", "a")
-        f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
         f.write("--- Ting between {0} and {1} ---\n".format(relays[1],relays[2]))
         f.write("RTT: avg/min/max/stddev ")
+        f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
         f.write(str(t_xy))
         f.write("\n")
         f.close()
