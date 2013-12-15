@@ -19,11 +19,12 @@ from numpy import array
 import numpy
 import inspect
 import re
+import datetime
 
 
 TCP_IP = '128.8.126.92' # bluepill ip
 TCP_PORT = 8080 # port bluepill is listening on
-BUFFER_SIZE = 128 # arbitrary
+BUFFER_SIZE = 64 # arbitrary
 SOCKS_HOST = "127.0.0.1" # localhost                                            
 SOCKS_PORT = 9050 # port connecting with tor socks
 SOCKS_TYPE = socks.PROXY_TYPE_SOCKS5
@@ -154,9 +155,10 @@ def ping(ip):
     cmd = ['ping', '-c',str(NUM_PINGS),ip]
     p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
     for line in p.stdout.readlines():
+        print line
         ping = regex.findall(line)
         if ping != []:
-            pings.append(int(float(ping[0])))
+            pings.append(float(ping[0]))
     p.wait()
     pings = pings[:-1]
     return pings
@@ -193,24 +195,26 @@ def ting(t, sock):
     # Connect to bluepill server at port 8080
     try:
         sock.connect((TCP_IP, TCP_PORT))
-        for i in range(NUM_PINGS):
-            # Name of the exit relay that bluepill will connect to
-            MESSAGE = str(controller.get_circuit(curr_cid).path[0][1])
-            print '{0} bytes to {1}: ping_num={2}'.format(BUFFER_SIZE,TCP_IP,i)
-            # Take measurement of time when message is sent
-            start_time = time.time()
+        sock.send("echo")
+        data = sock.recv(BUFFER_SIZE)
+        if data == "OKAY":
+            for i in range(NUM_PINGS):
+                # Name of the exit relay that bluepill will connect to
+                MESSAGE = str(i)
+                print '{0} bytes to {1}: ping_num={2}'.format(BUFFER_SIZE,TCP_IP,i)
+                # Take measurement of time when message is sent
+                start_time = time.time()
 
-            # Send name of exit node to bluepill 
-            sock.send(MESSAGE)
+                # Send name of exit node to bluepill 
+                sock.send(MESSAGE)
 
-            # Store data recieved from bluepill
-            data = sock.recv(BUFFER_SIZE)
+                # Store data recieved from bluepill
+                data = sock.recv(BUFFER_SIZE)
 
-            # Take measurement of time when response is recieved
-            end_time = time.time()
-            t[i] = (end_time-start_time)
+                # Take measurement of time when response is recieved
+                end_time = time.time()
+                t[i] = (end_time-start_time)*1000
         sock.close()
-
         return t
     except TypeError as exc:
         print "Failed to conect using the given circuit.", exc
@@ -235,17 +239,16 @@ while 1:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((TCP_IP, TCP_PORT))
         print "== Sending IP of X to Bluepill"
-        s.send(exits[relays[1]])
+        s.send("ping {0}".format(exits[relays[1]]))
         print "Waiting for ping results..."
-        dpings = s.recv(BUFFER_SIZE)
+        dpings = s.recv(1024)
         regex = re.compile("(\d+.\d+)")
         temp = regex.findall(dpings)
         r_xd = []
         for x in temp:
-            r_xd.append(int(float(x)))
+            r_xd.append(float(x))
         print "R_XD", r_xd
         print "== Recieved ping results from Bluepill"
-        print "==\n==\n=="
         print '--- ting statistics ---'
         print NUM_PINGS, 'packets transmitted'
         print 'rtt avg/min/max/med/stddev =', get_stats(r_xd)
@@ -260,7 +263,6 @@ while 1:
         print "======== Tinging D with Full Circuit ========"
         print "============================================="
         t_total = ting(swxyzd, sock)
-        print "T_total", t_total
         print '--- ting statistics ---'
         print NUM_PINGS, 'packets transmitted'
         print 'rtt avg/min/max/med/stddev =', get_stats(t_total)
@@ -274,7 +276,6 @@ while 1:
         print "======== Tinging D with Sub Circuit (W,X) ========"
         print "=================================================="
         t_wx = ting(swxd, sock)
-        print "T_WX", t_wx
         print '--- ting statistics ---'
         print NUM_PINGS, 'packets transmitted'
         print 'rtt avg/min/max/med/stddev =', get_stats(t_wx)
@@ -288,7 +289,6 @@ while 1:
         print "======== Tinging D with Sub Circuit (Y,Z) ========"
         print "=================================================="
         t_yz = ting(syzd, sock)
-        print "T_YZ", t_yz
         print '--- ting statistics ---'
         print NUM_PINGS, 'packets transmitted'
         print 'rtt avg/min/max/med/stddev =', get_stats(t_yz)
@@ -298,39 +298,43 @@ while 1:
         print "======== Pinging Y from S ========"
         print "=================================="
         r_sy = ping(exits[relays[1]])
-        print "R_SY", r_sy
+        while(len(r_sy) != 20):
+            print "== Not enough pings"
+            r_sy = ping(exits[relays[1]])
         print '--- ping statistics ---'
         print NUM_PINGS, 'packets transmitted'
         print 'rtt avg/min/max/med/stddev =', get_stats(r_sy)
 
         t_xy = subtract_arrays(subtract_arrays(t_total,t_wx),t_yz) 
-        print t_xy
-        temp = []
-        for x in t_xy:
-            temp.append(x*1000)
-        t_xy = add_arrays(add_arrays(temp,r_sy),r_xd)
-        print t_xy
+        t_xy = add_arrays(add_arrays(t_xy,r_sy),r_xd)
+        t_xy = get_stats(t_xy)
 
-
-        t_xy = get_stats(temp)
-        print t_xy
-
-        print "\n...\n"
+        print "=================================="
+        print "=================================="
         print "--- Ting between {0} and {1} ---".format(relays[1],relays[2])
         print "rtt avg/min/max/stddev", t_xy
+        print "=================================="
+        print "=================================="
+        print ""
+        print "=================================="
+        print "=================================="
 
         f = open("ting_data.txt", "a")
-        f.write("--- Ting between {0} and {1} ---\n".format(relays[1],relays[2]))
+        f.write("--- Ting between {0} and {1} on {2} ---\n".format(relays[1],relays[2],str(datetime.datetime.now())))
         f.write("RTT: avg/min/max/stddev ")
-        f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
         f.write(str(t_xy))
         f.write("\n")
+        f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
         f.close()
     except KeyboardInterrupt as exc:
         print exc
         print "Exiting safely."
         break
-    except Exception as e:
-        print e
-        print "====== Error occured! Trying new circuit." 
+    except Exception as exc:
+        print "================================"
+        print "======== ERROR OCCURRED ========"
+        print exc
+        print "======== ERROR OCCURRED ========"
+        print "================================"
 
+    
