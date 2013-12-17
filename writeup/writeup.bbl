@@ -1,0 +1,18 @@
+\begin{thebibliography}{1}
+
+\bibitem{improving}
+F.~Chen and J.~Pasquale.
+\newblock Toward improving path selection in tor.
+\newblock In {\em Global Telecommunications Conference (GLOBECOM 2010), 2010
+  IEEE}, pages 1--6, 2010.
+
+\bibitem{rtt}
+ra\_.
+\newblock Tor rtt, Dec. 2013.
+
+\bibitem{protocol}
+N.~M. Roger~Dingledine.
+\newblock Tor protocol specification.
+\newblock 2013.
+
+\end{thebibliography}
