@@ -164,12 +164,12 @@ def ping(ip):
     return pings
 
 def get_valid_nodes():
-    files = os.listdir(".")
+    files = os.listdir("./../data")
     exits = {}
     for name in files:
-        if name == "exits.txt":
+        if name == "valid_exits.txt":
             print "Found list of active relays!"
-            f = open(name)
+            f = open("./../data/valid_exits.txt")
             for line in f.readlines():
                 relay = line.strip().split()
                 exits[relay[0]] = relay[1]
@@ -235,6 +235,9 @@ while 1:
         # Choose 4 node circuit of W, X, Y, and Z
         relays = choose_relays(controller)
 
+        print "=================================="
+        print "======== Pinging X from D ========"
+        print "=================================="
         print "== Connecting to Bluepill"
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((TCP_IP, TCP_PORT))
@@ -253,6 +256,17 @@ while 1:
         print NUM_PINGS, 'packets transmitted'
         print 'rtt avg/min/max/med/stddev =', get_stats(r_xd)
         s.close()
+
+        print "=================================="
+        print "======== Pinging Y from S ========"
+        print "=================================="
+        r_sy = ping(exits[relays[2]])
+        while(len(r_sy) != 20):
+            print "== Not enough pings"
+            r_sy = ping(exits[relays[2]])
+        print '--- ping statistics ---'
+        print NUM_PINGS, 'packets transmitted'
+        print 'rtt avg/min/max/med/stddev =', get_stats(r_sy)
 
         # Add stream prober 
         listen = controller.add_event_listener(probe_stream, EventType.STREAM)
@@ -293,38 +307,34 @@ while 1:
         print NUM_PINGS, 'packets transmitted'
         print 'rtt avg/min/max/med/stddev =', get_stats(t_yz)
 
-        sock = setup_proxy()
-        print "=================================="
-        print "======== Pinging Y from S ========"
-        print "=================================="
-        r_sy = ping(exits[relays[1]])
-        while(len(r_sy) != 20):
-            print "== Not enough pings"
-            r_sy = ping(exits[relays[1]])
-        print '--- ping statistics ---'
-        print NUM_PINGS, 'packets transmitted'
-        print 'rtt avg/min/max/med/stddev =', get_stats(r_sy)
+        #t_xy = subtract_arrays(subtract_arrays(t_total,t_wx),t_yz) 
+        #t_xy = add_arrays(add_arrays(t_xy,r_sy),r_xd)
+        #t_xy = get_stats(t_xy)
 
-        t_xy = subtract_arrays(subtract_arrays(t_total,t_wx),t_yz) 
-        t_xy = add_arrays(add_arrays(t_xy,r_sy),r_xd)
-        t_xy = get_stats(t_xy)
+        r_xy = [0 for x in range(NUM_PINGS)]
+        for i in range(len(t_total)):
+            r_xy[i] = t_total[i] - t_wx[i] - t_yz[i] + r_sy[i] + r_xd[i]
 
         print "=================================="
         print "=================================="
         print "--- Ting between {0} and {1} ---".format(relays[1],relays[2])
-        print "rtt avg/min/max/stddev", t_xy
+        print "R_XY", r_xy
+        print "STATS: ", get_stats(r_xy)
         print "=================================="
         print "=================================="
         print ""
         print "=================================="
         print "=================================="
 
-        f = open("ting_data.txt", "a")
+        f = open("../data/correct.txt", "a")
         f.write("--- Ting between {0} and {1} on {2} ---\n".format(relays[1],relays[2],str(datetime.datetime.now())))
-        f.write("RTT: avg/min/max/stddev ")
-        f.write(str(t_xy))
-        f.write("\n")
+        f.write("==== R_XY: %s\n" % str(get_stats(r_xy)))
         f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
+        f.write("T_TOTAL: %s\n" % str(get_stats(t_total)))
+        f.write("T_WX: %s\n" % str(get_stats(t_wx)))
+        f.write("T_YZ: %s\n" % str(get_stats(t_yz)))
+        f.write("R_SY: %s\n" % str(get_stats(r_sy)))
+        f.write("R_XD: %s\n" % str(get_stats(r_xd)))
         f.close()
     except KeyboardInterrupt as exc:
         print exc

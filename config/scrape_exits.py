@@ -8,12 +8,12 @@ from bs4 import BeautifulSoup
 
 ips = []
 
-iplist = open('Tor_ip_list_EXIT.csv', 'rb')
+iplist = open('../data/tor_ip_list_exit.csv', 'rb')
 for ip in iplist.readlines():
     ips.append(ip.strip())
 iplist.close
 
-f = open("exits.txt", 'w')
+f = open("../data/valid_exits.txt", 'w')
 
 count = 1
 reachable_count = 0
