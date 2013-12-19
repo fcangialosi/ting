@@ -45,7 +45,7 @@ SOCKS_PORT = 9050 # port connecting with tor socks
 SOCKS_TYPE = socks.PROXY_TYPE_SOCKS5
 CONTROLLER_PORT = 9051 # port for connecting with stem controller
 NUM_TINGS = args['num_tings']
-NUM_PAIRS = args['num_pairs']
+NUM_PAIRS = int(args['num_pairs'])
 CHECK_ONE = args['check_one']
 ACCURACY = args['check_accuracy']
 OUTPUT = args['output_file']
@@ -270,12 +270,26 @@ def calculate_r_xy(relays, purpose="pairs"):
     s.send("ping {0}".format(exits[relays[1]]))
     resp = s.recv(1024)
     r_xd = extract_ping_data(resp)
+    s.close()
+    count = 0 
+    while(len(r_xd) != int(NUM_TINGS)):
+        print("R_XD:", r_xd)
+        count = count + 1
+        if(count == 3):
+            raise NotReachableException
+        else:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((TCP_IP, TCP_PORT))
+            s.send("ping {0}".format(exits[relays[1]]))
+            resp = s.recv(1024)
+            r_xd = extract_ping_data(resp)
+            s.close()
     print("R_XD:", r_xd)
-    if(r_xd is []):
+    if(r_xd == []):
         raise NotReachableException
     print("--- ping statistics ---")
     print('rtt avg/min/max/med/stddev =', get_stats(r_xd))
-    s.close()
+   
 
     print("----- Pinging Y from S -----")
     r_sy = ping(exits[relays[2]])
@@ -334,11 +348,13 @@ def calculate_r_xy(relays, purpose="pairs"):
 
 
     d = datetime.datetime.now()
-    if(purpose is "pairs"):
+    if(purpose == "pairs"):
         f = open((DATA_DIR + "ting_pair_log_{0}_{1}_{2}".format(d.month,d.day,d.year)), 'a')
-    elif(purpose is "accuracy"):
+    elif(purpose == "accuracy"):
         f = open((DATA_DIR + "ting_accuracy_log_{0}_{1}_{2}".format(d.month,d.day,d.year)), 'a')
         f.write("Checking accuracy of Ting time between {0}({1}) and {2}({3})\n".format(relays[1],exits[relays[1]],relays[2],exits[relays[2]]))
+    elif(purpose == "single"):
+        f = open((DATA_DIR + "single_{0}_and_{1}".format(relays[1],relays[2])), 'a')
     f.write("--- Ting between {0} and {1} on {2} ---\n".format(relays[1],relays[2],str(datetime.datetime.now())))
     f.write("==== R_XY: %s\n" % str(get_stats(r_xy)))
     f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
@@ -405,6 +421,40 @@ if(ACCURACY):
             fails = fails + 1
         except InvalidRequest:
             fails = fails + 1
+elif(CHECK_ONE):
+    success = False
+    while not success:
+        try: 
+            xy = CHECK_ONE
+            wz = pick_relays(2, exits.keys())
+            wxyz = [wz[0],xy[0],xy[1],wz[1]]
+
+            curr_cid = create_circuit(wxyz)
+            print(curr_cid)
+           
+            sub_one = create_circuit(wxyz[:-2])
+            print(sub_one)
+
+            sub_two = create_circuit(wxyz[2:])
+            print(sub_two)
+
+            print("===========================")
+            print("Tinging single {0} and {1}".format(xy[0],xy[1]))
+            print("W: %s (%s)\nX: %s (%s)\nY: %s (%s)\nZ: %s (%s)" % (wxyz[0], exits[wxyz[0]], wxyz[1], exits[wxyz[1]], wxyz[2], exits[wxyz[2]], wxyz[3], exits[wxyz[3]]))
+            print("===========================")
+
+            start = time.time()
+            calculate_r_xy(wxyz, purpose="single")
+            end = time.time()
+
+            print("TOTAL TIME ELAPSED: {0} seconds\n".format(end-start))
+            success = True
+        except CircuitExtensionFailed:
+            print("== Circuit Extension Failed, trying new W and Z")
+        except InvalidRequest:
+            print("== Circuit Extension Failed, trying new W and Z")
+        except NotReachableException:
+            print("== IP of X or Y is not reachable.")
 
 else:
     full_set = []
