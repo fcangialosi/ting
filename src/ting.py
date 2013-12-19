@@ -38,7 +38,7 @@ parser = setup_argparse()
 args = vars(parser.parse_args())
 
 TCP_IP = args['destination_ip']# bluepill ip
-TCP_PORT = args['destination_port'] # port bluepill is listening on
+TCP_PORT = int(args['destination_port']) # port bluepill is listening on
 BUFFER_SIZE = 64 # arbitrary
 SOCKS_HOST = "127.0.0.1" # localhost                                            
 SOCKS_PORT = 9050 # port connecting with tor socks
@@ -172,11 +172,11 @@ def build_random_circuit(controller):
         except (InvalidRequest,CircuitExtensionFailed) as exc:
             fails = fails+1
 
+
 def create_circuit(relays):
     # Check if the circuit with those nodes exists already, if so, use it, if not, create a new circuit
     result = check_for_circuit(relays)
     if result is -1:
-        print("No circuit currently exists with those relays, creating...")
         # Block until the circuit is successfully built
         cid = controller.new_circuit(relays, await_build=True)
     else:
@@ -260,9 +260,7 @@ def extract_ping_data(data):
         pings.append(float(x))
     return pings
 
-def calculate_r_xy(relays):
-    global curr_cid 
-
+def calculate_r_xy(relays, purpose="pairs"):
     # Tell bluepill to ping X
     print("----- Pinging X from D -----")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -271,6 +269,8 @@ def calculate_r_xy(relays):
     resp = s.recv(1024)
     r_xd = extract_ping_data(resp)
     print("R_XD:", r_xd)
+    if(r_xd is []):
+        raise NotReachableException
     print("--- ping statistics ---")
     print('rtt avg/min/max/med/stddev =', get_stats(r_xd))
     s.close()
@@ -293,14 +293,16 @@ def calculate_r_xy(relays):
     
     # Use Tor as proxy
     sock = setup_proxy()
-
+    print(curr_cid)
     print("------ Ting S,W,X,Y,Z ------")
     t_total = ting(swxyzd, sock)
     print("T_TOTAL:", t_total)
     print('--- ting statistics ---')
     print('rtt avg/min/max/med/stddev =', get_stats(t_total))
 
+    global curr_cid 
     curr_cid = sub_one
+    print(curr_cid)
     controller.remove_event_listener(listen)
     listen = controller.add_event_listener(probe_stream, EventType.STREAM)
     sock = setup_proxy()
@@ -310,7 +312,9 @@ def calculate_r_xy(relays):
     print('--- ting statistics ---')
     print('rtt avg/min/max/med/stddev =', get_stats(t_wx))
 
+    global curr_cid 
     curr_cid = sub_two
+    print(curr_cid)
     controller.remove_event_listener(listen)
     listen = controller.add_event_listener(probe_stream, EventType.STREAM)
     sock = setup_proxy()
@@ -329,7 +333,12 @@ def calculate_r_xy(relays):
     print("STATS: ", get_stats(r_xy))
 
 
-    f = open((DATA_DIR + "ting_pair_data_{0}_{1}_{2}_{3}_{4}".format(d.month,d.day,d.year,d.hour,d.minute)), 'a')
+    d = datetime.datetime.now()
+    if(purpose is "pairs"):
+        f = open((DATA_DIR + "ting_pair_log_{0}_{1}_{2}".format(d.month,d.day,d.year)), 'a')
+    elif(purpose is "accuracy"):
+        f = open((DATA_DIR + "ting_accuracy_log_{0}_{1}_{2}".format(d.month,d.day,d.year)), 'a')
+        f.write("Checking accuracy of Ting time between {0}({1}) and {2}({3})\n".format(relays[1],exits[relays[1]],relays[2],exits[relays[2]]))
     f.write("--- Ting between {0} and {1} on {2} ---\n".format(relays[1],relays[2],str(datetime.datetime.now())))
     f.write("==== R_XY: %s\n" % str(get_stats(r_xy)))
     f.write("Circuit:\n%s(%s)\n%s(%s)\n%s(%s)\n%s(%s)\n" % (relays[0], exits[relays[0]], relays[1], exits[relays[1]], relays[2], exits[relays[2]], relays[3], exits[relays[3]]))
@@ -362,8 +371,45 @@ count = 0
 if(ACCURACY):
     xy = pick_relays(2, exits.keys())
     full_set = []
-    for i in range(len(NUM_PAIRS)):
-        print('ay')
+    fails, count, total = 0, 1, NUM_PAIRS
+    for i in range(NUM_PAIRS):
+        try:
+            wz = pick_relays(2, exits.keys())
+            wxyz = [wz[0],xy[0],xy[1],wz[1]]
+
+            global curr_cid
+            curr_cid = create_circuit(wxyz)
+            print(curr_cid)
+           
+            global sub_one
+            sub_one = create_circuit(wxyz[:-2])
+            print(sub_one)
+
+            global sub_two
+            sub_two = create_circuit(wxyz[2:])
+            print(sub_two)
+
+            print("===========================")
+            print("Tinging pair {0}/{1}".format(count,total))
+            print("W: %s (%s)\nX: %s (%s)\nY: %s (%s)\nZ: %s (%s)" % (wxyz[0], exits[wxyz[0]], wxyz[1], exits[wxyz[1]], wxyz[2], exits[wxyz[2]], wxyz[3], exits[wxyz[3]]))
+            print("===========================")
+
+            start = time.time()
+            calculate_r_xy(wxyz, purpose="accuracy")
+            end = time.time()
+
+            print("TOTAL TIME ELAPSED: {0} seconds\n".format(end-start))
+
+        except TypeError as exc:
+            print(exc)
+            print("Failed to create circuit for nodes:", wxyz)
+        except NotReachableException as exc:
+            print("The given ip address for Y (%s) is not public" % xy[1])
+        except CircuitExtensionFailed:
+            fails = fails + 1
+        except InvalidRequest:
+            fails = fails + 1
+
 else:
     full_set = []
     node_set = pick_relays(int(NUM_PAIRS), exits.keys())
@@ -382,12 +428,26 @@ else:
     f.write(str(full_set))
     f.close()
 
+    fails = 0
     for pair in full_set:
-        try: 
+        try:
             count = count + 1
             xy = [pair[0], pair[1]]
             wz = pick_n_more_relays(2,xy,exits.keys())
             wxyz = (wz[0],xy[0],xy[1],wz[1])
+
+            global curr_cid
+            curr_cid = create_circuit(wxyz)
+            print(curr_cid)
+           
+            global sub_one
+            sub_one = create_circuit(wxyz[:-2])
+            print(sub_one)
+
+            global sub_two
+            sub_two = create_circuit(wxyz[2:])
+            print(sub_two)
+
             
             print("===========================")
             print("Tinging pair {0}/{1}".format(count,total))
@@ -399,7 +459,14 @@ else:
             end = time.time()
 
             print("TOTAL TIME ELAPSED: {0} seconds\n".format(end-start))
-        except Exception as exc:
-            print ("===== ERROR: {0}".format(exc))
+        except TypeError as exc:
+            print(exc)
+            print("Failed to create circuit for nodes:", wxyz)
+        except NotReachableException as exc:
+            print("The given ip address for Y (%s) is not public" % xy[1])
+        except CircuitExtensionFailed:
+            fails = fails + 1
+        except InvalidRequest:
+            fails = fails + 1
 
 
