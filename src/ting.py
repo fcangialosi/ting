@@ -26,7 +26,7 @@ def setup_argparse():
     parser = argparse.ArgumentParser(description='Ting is like ping, but instead meausres round-trip times between two indivudal nodes in the Tor network.')
     parser.add_argument('-a','--check-accuracy', help='Determine accuracy of measurements by changing only W and Z for a consistent X and Y.', action='store_true')
     parser.add_argument('-n', '--num-pairs', help="Number of pairs to test. Defaults to infinite", default=100)
-    parser.add_argument('-dp', '--destination-port', help="Specify destination port.",default=8080)
+    parser.add_argument('-dp', '--destination-port', help="Specify destination port.",default=6666)
     parser.add_argument('-di', '--destination-ip', help="Specify destination ip address.", default='128.8.126.92')
     parser.add_argument('-p', '--num-tings', help="Specify the number of times to ting each circuit.", default=20)
     parser.add_argument('-c', '--check-one', help="Quickly run for a single X and Y.", nargs=2)
@@ -261,6 +261,8 @@ def extract_ping_data(data):
     return pings
 
 def calculate_r_xy(relays, purpose="pairs"):
+    global curr_cid 
+    
     # Tell bluepill to ping X
     print("----- Pinging X from D -----")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -300,7 +302,6 @@ def calculate_r_xy(relays, purpose="pairs"):
     print('--- ting statistics ---')
     print('rtt avg/min/max/med/stddev =', get_stats(t_total))
 
-    global curr_cid 
     curr_cid = sub_one
     print(curr_cid)
     controller.remove_event_listener(listen)
@@ -312,7 +313,6 @@ def calculate_r_xy(relays, purpose="pairs"):
     print('--- ting statistics ---')
     print('rtt avg/min/max/med/stddev =', get_stats(t_wx))
 
-    global curr_cid 
     curr_cid = sub_two
     print(curr_cid)
     controller.remove_event_listener(listen)
@@ -356,7 +356,6 @@ def calculate_r_xy(relays, purpose="pairs"):
 
 make_title()
 
-global controller
 # Connect to Stem controller, set configs, and authenticate 
 controller = Controller.from_port(port = CONTROLLER_PORT)
 controller.authenticate()
@@ -377,15 +376,12 @@ if(ACCURACY):
             wz = pick_relays(2, exits.keys())
             wxyz = [wz[0],xy[0],xy[1],wz[1]]
 
-            global curr_cid
             curr_cid = create_circuit(wxyz)
             print(curr_cid)
            
-            global sub_one
             sub_one = create_circuit(wxyz[:-2])
             print(sub_one)
 
-            global sub_two
             sub_two = create_circuit(wxyz[2:])
             print(sub_two)
 
@@ -436,15 +432,12 @@ else:
             wz = pick_n_more_relays(2,xy,exits.keys())
             wxyz = (wz[0],xy[0],xy[1],wz[1])
 
-            global curr_cid
             curr_cid = create_circuit(wxyz)
             print(curr_cid)
            
-            global sub_one
             sub_one = create_circuit(wxyz[:-2])
             print(sub_one)
 
-            global sub_two
             sub_two = create_circuit(wxyz[2:])
             print(sub_two)
 
