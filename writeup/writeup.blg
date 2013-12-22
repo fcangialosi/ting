@@ -3,48 +3,44 @@ Capacity: max_strings=35307, hash_size=35307, hash_prime=30011
 The top-level auxiliary file: writeup.aux
 The style file: abbrv.bst
 Database file #1: biblio.bib
-Warning--entry type for "rtt" isn't style-file defined
---line 1 of file biblio.bib
-Warning--empty note in protocol
-You've used 3 entries,
+You've used 10 entries,
             2118 wiz_defined-function locations,
-            510 strings with 3938 characters,
-and the built_in function-call counts, 759 in all, are:
-= -- 69
-> -- 27
-< -- 1
-+ -- 11
-- -- 8
-* -- 37
-:= -- 131
-add.period$ -- 8
-call.type$ -- 3
-change.case$ -- 13
+            564 strings with 5391 characters,
+and the built_in function-call counts, 3428 in all, are:
+= -- 335
+> -- 170
+< -- 3
++ -- 69
+- -- 58
+* -- 238
+:= -- 545
+add.period$ -- 29
+call.type$ -- 10
+change.case$ -- 61
 chr.to.int$ -- 0
-cite$ -- 4
-duplicate$ -- 32
-empty$ -- 69
-format.name$ -- 8
-if$ -- 162
+cite$ -- 10
+duplicate$ -- 124
+empty$ -- 275
+format.name$ -- 58
+if$ -- 737
 int.to.chr$ -- 0
-int.to.str$ -- 3
-missing$ -- 1
-newline$ -- 17
-num.names$ -- 6
-pop$ -- 19
+int.to.str$ -- 10
+missing$ -- 6
+newline$ -- 50
+num.names$ -- 16
+pop$ -- 73
 preamble$ -- 1
-purify$ -- 10
+purify$ -- 51
 quote$ -- 0
-skip$ -- 28
+skip$ -- 101
 stack$ -- 0
-substring$ -- 27
-swap$ -- 8
-text.length$ -- 1
+substring$ -- 173
+swap$ -- 32
+text.length$ -- 3
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 12
-warning$ -- 1
-while$ -- 8
-width$ -- 4
-write$ -- 30
-(There were 2 warnings)
+type$ -- 40
+warning$ -- 0
+while$ -- 30
+width$ -- 12
+write$ -- 108
