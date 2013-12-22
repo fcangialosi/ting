@@ -373,6 +373,18 @@ def calculate_r_xy(relays, purpose="pairs"):
 	print("R_XY", r_xy)
 	print("STATS: ", get_stats(r_xy))
 
+	total_s = get_stats(t_total)
+	wx_s = get_stats(t_wx)
+	yz_s = get_stats(t_yz)
+	xd_s = get_stats(r_xd)
+	ys_s = get_stats(r_sy)
+
+	a_xy = [0,0,0,0,0]
+	for i in range(5):
+		a_xy[i] = total_s[i] - wx_s[i] - yz_s[i] + xd_s[i] + ys_s[i]
+
+	print("AVERAGES: ", str(a_xy))
+
 	d = datetime.datetime.now()
 	if(purpose == "pairs"):
 		f = open((DATA_DIR + "ting_pair_log_{0}_{1}_{2}".format(d.month,d.day,d.year)), 'a')
@@ -474,6 +486,7 @@ if(ACCURACY):
 				controller.close_circuit(sub_two)
 elif(CHECK_ONE):
 	success = False
+	runs = 0
 	while not success:
 		try: 
 			xy = CHECK_ONE
