@@ -1,8 +1,8 @@
-This is pdfTeX, Version 3.1415926-2.4-1.40.13 (TeX Live 2012) (format=pdflatex 2012.6.30)  21 DEC 2013 21:39
+This is pdfTeX, Version 3.1415926-2.4-1.40.13 (TeX Live 2012) (format=pdflatex 2012.6.30)  31 DEC 2013 16:24
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**writeup.tex
+**writeup
 (./writeup.tex
 LaTeX2e <2011/06/27>
 Babel <v3.8m> and hyphenation patterns for english, dumylang, nohyphenation, ge
@@ -576,20 +576,20 @@ File: tikzlibrarypositioning.code.tex 2008/10/06 v2.10 (rcs-revision 1.7)
 ) (./writeup.aux)
 \openout1 = `writeup.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
 
 (/usr/local/texlive/2012/texmf-dist/tex/context/base/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
@@ -620,7 +620,7 @@ File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
 \AtBeginShipoutBox=\box40
-Package hyperref Info: Link coloring OFF on input line 21.
+Package hyperref Info: Link coloring OFF on input line 23.
 
 (/usr/local/texlive/2012/texmf-dist/tex/latex/hyperref/nameref.sty
 Package: nameref 2010/04/30 v2.40 Cross-referencing by name of section
@@ -630,95 +630,152 @@ Package: gettitlestring 2010/12/03 v1.4 Cleanup title references (HO)
 )
 \c@section@level=\count142
 )
-LaTeX Info: Redefining \ref on input line 21.
-LaTeX Info: Redefining \pageref on input line 21.
-LaTeX Info: Redefining \nameref on input line 21.
+LaTeX Info: Redefining \ref on input line 23.
+LaTeX Info: Redefining \pageref on input line 23.
+LaTeX Info: Redefining \nameref on input line 23.
 
 (./writeup.out) (./writeup.out)
 \@outlinefile=\write4
 \openout4 = `writeup.out'.
 
  ABD: EveryShipout initializing macros
+
+LaTeX Warning: Citation `PlanetLab' on page 1 undefined on input line 32.
+
+
+LaTeX Warning: Citation `Geant' on page 1 undefined on input line 32.
+
 Missing character: There is no â in font cmr10!
 Missing character: There is no € in font cmr10!
 Missing character: There is no ™ in font cmr10!
- [1{/usr/local/texlive/2012/texmf-var/fonts/map/pdftex/updmap/pdftex.map}
+[1{/usr/local/texlive/2012/texmf-var/fonts/map/pdftex/updmap/pdftex.map}
 
 
-] [2]
-Underfull \hbox (badness 1014) in paragraph at lines 52--53
-\OT1/cmr/m/n/10.95 through en-tirely dif-fer-ent means [[]]. They
+]
+
+LaTeX Warning: Citation `Tor' on page 2 undefined on input line 34.
+
+[2]
+
+LaTeX Warning: Citation `Tor_Metrics_Portal' on page 3 undefined on input line 
+44.
+
+
+LaTeX Warning: Citation `tor_about' on page 3 undefined on input line 46.
+
+
+LaTeX Warning: Citation `tor_about' on page 3 undefined on input line 48.
+
+
+LaTeX Warning: Citation `Gummadi' on page 3 undefined on input line 53.
+
+[3]
+
+LaTeX Warning: Citation `Wang' on page 4 undefined on input line 55.
+
+
+LaTeX Warning: Citation `Eriksson' on page 4 undefined on input line 57.
+
+
+LaTeX Warning: Citation `Tor_RTT' on page 4 undefined on input line 61.
+
+
+LaTeX Warning: Citation `Tor_Metrics_Portal' on page 4 undefined on input line 
+61.
+
+[4]
+Underfull \hbox (badness 2213) in paragraph at lines 65--66
+\OT1/cmr/m/n/10.95 As pre-vi-ously men-tioned, our pro-ce-dure is
  []
 
-[3] [4]
-Underfull \hbox (badness 1184) in paragraph at lines 123--124
+
+LaTeX Warning: Citation `Tor_RTT' on page 5 undefined on input line 121.
+
+
+Underfull \hbox (badness 1184) in paragraph at lines 124--125
 []\OT1/cmr/m/n/10.95 Create a cir-cuit of four ran-domly cho-
  []
 
 
-Underfull \hbox (badness 1325) in paragraph at lines 124--125
+Underfull \hbox (badness 1325) in paragraph at lines 125--126
+[]\OT1/cmr/m/n/10.95 Send a 64-byte mes-sage from S to D,
+ []
+
+[5]
+Underfull \hbox (badness 1325) in paragraph at lines 131--132
 []\OT1/cmr/m/n/10.95 Send a 64-byte mes-sage from S to D,
  []
 
 
-Underfull \hbox (badness 1325) in paragraph at lines 130--131
+Underfull \hbox (badness 1325) in paragraph at lines 137--138
 []\OT1/cmr/m/n/10.95 Send a 64-byte mes-sage from S to D,
  []
 
+[6]
 
-Underfull \hbox (badness 1325) in paragraph at lines 136--137
-[]\OT1/cmr/m/n/10.95 Send a 64-byte mes-sage from S to D,
- []
+! LaTeX Error: File `cdf' not found.
 
-[5] <cdf.jpg, id=94, 578.16pt x 433.62pt>
-File: cdf.jpg Graphic file (type jpg)
- <use cdf.jpg>
-Package pdftex.def Info: cdf.jpg used on input line 158.
-(pdftex.def)             Requested size: 289.07999pt x 216.80946pt.
- [6] [7 <./cdf.jpg>]
-(./writeup.bbl
-Underfull \hbox (badness 10000) in paragraph at lines 32--38
-\OT1/cmr/m/n/10.95 M. Ra-bi-novich, O. Spatscheck, and
- []
+See the LaTeX manual or LaTeX Companion for explanation.
+Type  H <return>  for immediate help.
+ ...                                              
+                                                  
+l.159 \includegraphics[width=4in]{cdf}
+                                      
+? 
+! Interruption.
+\GenericError  ...                                
+                                                  \endgroup 
+l.159 \includegraphics[width=4in]{cdf}
+                                      
+? 
 
-[8])
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 180.
- [9
+LaTeX Warning: Citation `improving_path' on page 7 undefined on input line 171.
+
+
+[7]
+No file writeup.bbl.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 182.
+[8] [9
 
 ]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 180.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 182.
  (./writeup.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 180.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 180.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 182.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 182.
 Package rerunfilecheck Info: File `writeup.out' has not changed.
 (rerunfilecheck)             Checksum: F98661A996FCA9BB0938162E1D2CCEF4;274.
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 180.
+
+
+LaTeX Warning: There were undefined references.
+
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 182.
  ) 
 Here is how much of TeX's memory you used:
- 15008 strings out of 493488
- 266541 string characters out of 3141326
- 444369 words of memory out of 3000000
- 17998 multiletter control sequences out of 15000+200000
- 10972 words of font info for 40 fonts, out of 3000000 for 9000
+ 15004 strings out of 493488
+ 266389 string characters out of 3141326
+ 442658 words of memory out of 3000000
+ 17994 multiletter control sequences out of 15000+200000
+ 11280 words of font info for 41 fonts, out of 3000000 for 9000
  957 hyphenation exceptions out of 8191
- 56i,11n,55p,1805b,896s stack positions out of 5000i,500n,10000p,200000b,50000s
-</usr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb
-></usr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb>
-</usr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></
-usr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></us
-r/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/
-local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/lo
-cal/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local
-/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/te
-xlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/tex
-live/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texli
-ve/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texlive
-/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/local/texlive/
-2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb>
-Output written on writeup.pdf (9 pages, 236872 bytes).
+ 56i,11n,55p,1754b,896s stack positions out of 5000i,500n,10000p,200000b,50000s
+</usr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
+></usr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb>
+</usr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb><
+/usr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></u
+sr/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr
+/local/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/l
+ocal/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/loc
+al/texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/
+texlive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/tex
+live/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texl
+ive/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texliv
+e/2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texlive/
+2012/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/local/texlive/2
+012/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb>
+Output written on writeup.pdf (9 pages, 177625 bytes).
 PDF statistics:
- 184 PDF objects out of 1000 (max. 8388607)
- 156 compressed objects within 2 object streams
- 38 named destinations out of 1000 (max. 500000)
- 72 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 153 PDF objects out of 1000 (max. 8388607)
+ 125 compressed objects within 2 object streams
+ 28 named destinations out of 1000 (max. 500000)
+ 67 words of extra memory for PDF output out of 10000 (max. 10000000)
 

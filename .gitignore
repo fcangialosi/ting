@@ -1,0 +1,13 @@
+# Any data files generates
+*.txt
+
+# Any auxillary writeup files, only .tex is needed to generate
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.pdf
+
+# Generated binaries
+*.pyc
