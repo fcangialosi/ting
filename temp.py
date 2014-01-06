@@ -3,7 +3,6 @@ import time
 import socket
 from stem import CircStatus, OperationFailed, InvalidRequest, InvalidArguments, CircuitExtensionFailed
 from stem.control import Controller, EventType
-from pprint import pprint
 import sys
 from random import choice
 import os
@@ -16,6 +15,7 @@ import re
 import datetime
 import argparse
 import traceback
+import os.path
 from os.path import join, dirname, isfile
 
 sys.path.append(join(dirname(__file__), 'libs'))
@@ -40,11 +40,43 @@ Contains all auxillary methods
 """
 class TingUtils:
 	def __init__(self, data_dir, destination_ip, destination_port):
-		self._data_dir = data_dir
+		if(not data_dir[-1] is "/"):
+			self._data_dir = data_dir + "/"
+		else:
+			self._data_dir = data_dir
 		self._destination_ip = destination_ip
 		self._destination_port = destination_port
-		self._valid_exits_fname = "{0}nodes/validexits_{1}_{2}.txt".format(data_dir, str(destination_ip),str(destination_port))
-		self._blacklist_fname = "{0}nodes/blacklist_{1}_{2}.txt".format(data_dir, str(destination_ip),str(destination_port))
+		self.setup_data_dirs()
+		
+	def setup_data_dirs(self):
+		current_dir = os.path.dirname(os.path.realpath(__file__))
+		print (current_dir)
+		if(not os.path.exists(current_dir + "/" + self._data_dir + "nodes/")):
+			os.makedirs(current_dir + "/" + self._data_dir + "nodes/")
+		if(not os.path.exists(current_dir + "/" + self._data_dir + "tings/")):
+			os.makedirs(current_dir + "/" + self._data_dir + "tings/")
+
+
+		ip_underscore = self._destination_ip.replace(".", "_")
+		now = datetime.datetime.now()
+		date_underscore = "{0}_{1}_{2}".format(now.month, now.day, now.year)
+		first_sub = current_dir + "/data/nodes/%s" % ip_underscore
+
+		filenum = 1
+		if(os.path.exists(first_sub)):
+			all_sub = [first_sub+"/"+d for d in os.listdir(first_sub)]
+			if not all_sub == []:
+				most_recent = max(all_sub, key=os.path.getmtime)
+				node_files = os.listdir(most_recent)
+				regex = re.compile("validexits_\d+_(\d+).txt")
+				filenums = []
+				for f in node_files:
+					filenums.append(int(regex.findall(f)[0]))
+				if not filenums == []:
+					filenum = max(filenums)
+
+		self._valid_exits_fname = "{0}nodes/{1}/{2}/validexits_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
+		self._blacklist_fname = "{0}nodes/{1}/{2}/blacklist_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 
 	## REDO THIS
 	def make_title(self, socks_port, controller_port, dest_ip, dest_port, mode, mode_args, num_tings, num_pairs, buffer_size, data_dir, output, optimize):
@@ -77,19 +109,23 @@ class TingUtils:
 	def get_valid_nodes(self):
 		exits = {}
 		# Open file or generate if it doesn't exist
+		print (self._valid_exits_fname)
 		try:
 			f = open(self._valid_exits_fname)
 		except IOError as exc:
 			print("Could not find list of valid exit nodes.")
 			print("Downloading now... (This may take a few minutes)")
-			cmd = ['python', 'libs/scrape_exits.py', '-di', self._destination_ip, '-dp', str(self._destination_port)]
-			p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
+			cmd = ['python', 'scrape_exits.py', '-di', self._destination_ip, '-dp', str(self._destination_port)]
+			p = subprocess.Popen(cmd, shell=False)
+			p.communicate()
 			p.wait()
 
 		f = open(self._valid_exits_fname)
+		escapes = ["#", "\t", "\n"]
 		for line in f.readlines():
-			relay = line.strip().split()
-			exits[relay[0]] = relay[1]
+			if(not line[0] in escapes):
+				relay = line.strip().replace(" ", "").split(",")
+				exits[relay[0]] = relay[1]
 		f.close()
 
 		# Remove any blacklisted nodes from exit list
@@ -159,7 +195,7 @@ class TingUtils:
 		relays = [0 for x in range(n)]
 		for i in range(len(relays)):
 			temp = choice(self._exits)
-			while(temp in relays or temp == 'Unnamed' or temp in existing):
+			while(temp in relays or temp in existing):
 				temp = choice(self._exits)
 			relays[i] = temp
 		return relays
@@ -225,8 +261,9 @@ class CircuitBuilder:
 Controller class that does all of the work
 """
 class Worker:
-	def __init__(self, controller, args):
+	def __init__(self, controller, probe_stream, args):
 		self._controller = controller
+		self._probe_stream = probe_stream
 		self._controller_port = args['controller_port']
 		self._socks_host = '127.0.0.1'
 		self._socks_port = args['socks_port']
@@ -344,11 +381,15 @@ class Worker:
 		builder = self._builder
 
 		exits = utils.get_valid_nodes()
+		print(exits)
+
+		controller.add_event_listener(self._probe_stream, EventType.STREAM)
 		#utils.make_title(self._socks_port, self._controller_port, self._destination_ip, self._destination_port, self._mode, mode_args, self._num_tings, self._num_pairs, self._buffer_size, self._data_dir, self._output_file, self._optimize)
 
 
 		#relays = utils.pick_relays
 
+		controller.close()
 
 def main():
 	parser = argparse.ArgumentParser(prog='Ting', description='Ting is like ping, but instead measures round-trip times between two indivudal nodes in the Tor network.')
@@ -361,8 +402,9 @@ def main():
 	parser.add_argument('-b', '--buffer-size', help="Specify number of bytes to be sent in each Ting.", default=64)
 	parser.add_argument('-p', '--num-tings', help="Specify the number of times to ping each circuit.", default=20)
 	parser.add_argument('-out', '--output-file', help="Specify where to save log file.", default="")
-	parser.add_argument('-d', '--data-dir', help="Specify a different home directory from which to read and write data", default="../data/")
+	parser.add_argument('-d', '--data-dir', help="Specify a different home directory from which to read and write data", default="data/")
 	parser.add_argument('-o', '--optimize', help="Cache ping results from S and D to decrease running time", action='store_true')
+	parser.add_argument('-v', '--verbose', help="Print results along the way.", default='store_false')
 	args = vars(parser.parse_args())
 
 	controller = Controller.from_port(port = args['controller_port'])
@@ -392,17 +434,13 @@ def main():
 		print("Probe stream: status={0} purpose={1}".format(event.status, event.purpose))
 		if event.status == 'NEW' and event.purpose == 'USER':
 			attach_stream(event)
-		elif event.status == 'CLOSED':
-			stream_finished.set()
-
-	controller.add_event_listener(probe_stream, EventType.STREAM)
 
 	# Close all non-internal circuits.
 	for circ in controller.get_circuits():
 		if not circ.build_flags or 'IS_INTERNAL' not in circ.build_flags:
 			controller.close_circuit(circ.id)
 
-	w = Worker(controller, args)
+	w = Worker(controller, probe_stream, args)
 	w.start()
 
 	# DON'T FORGET TO CLOSE CONTROLLER!
