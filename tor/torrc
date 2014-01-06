@@ -5,7 +5,6 @@ DataDirectory /Users/fcangialosi/Applications/TorBrowser.app/Contents/Resources/
 DirPort 9030
 DirReqStatistics 0
 DownloadExtraInfo 1
-ExitNodes 0F65A248A72E3029380B6D171F824E2007E0FA36
 FetchUselessDescriptors 1
 GeoIPFile ../../Contents/Resources/Data/Tor/geoip
 Log notice stdout

@@ -21,7 +21,7 @@ from os.path import join, dirname, isfile
 sys.path.append(join(dirname(__file__), 'libs'))
 from SocksiPy import socks 
 
-
+version = "1.0"
 # Global value of the current circuit ID, to be read by attach_stream
 curr_cid = 0
 # Global value of 3 circuits constructed, assigned to curr_cid to be constructed
@@ -35,27 +35,104 @@ Thrown when destination is not reachable via a public ip address
 class NotReachableException(Exception):
 	pass
 
+"""
+Writes Ting output files
+"""
+class OutputWriter:
+	def __init__(self, args):
+		self._controller_port = args['controller_port']
+		self._socks_host = '127.0.0.1'
+		self._socks_port = args['socks_port']
+		self._socks_type = socks.PROXY_TYPE_SOCKS5
+		self._buffer_size = args['buffer_size']
+		self._destination_ip = args['destination_ip']
+		self._destination_port = args['destination_port']
+		self._num_tings = args['num_tings']
+		self._num_pairs = args['num_pairs']
+		self._mode = args['mode']
+		self._data_dir = args['data_dir']
+		now = datetime.datetime.now()
+		self._ting_dir = args['data_dir'] + "tings/" + "{0}_{1}_{2}".format(now.month, now.day, now.year) + "/"
+		self._optimize = args['optimize']
+		self._current_ting = 1
+
+	def createFile(self):
+		current_dir = os.path.dirname(os.path.realpath(__file__))
+		first_sub = current_dir + "/" + self._ting_dir
+		filenum = 1
+		if(not os.path.exists(first_sub)):
+			os.makedirs(first_sub)
+		else:
+			ting_files = os.listdir(first_sub)
+			regex = re.compile("ting_\w+_(\d+).txt")
+			filenums = []
+			for f in ting_files:
+				filenums.append(int(regex.findall(f)[0]))
+			if not filenums == []:
+				filenum = max(filenums)
+		self._output_file = self._ting_dir + "/ting_{0}_{1}.txt".format(self._mode,filenum)
+		self._f = open(self._output_file, 'a')
+
+		self.writeFileHeader()
+
+	def writeFileHeader(self):
+		self._f.write("### Ting " + version + " Log ###\n")
+		self._f.write("--------------------------------\n")
+		self._f.write("# SOCKS5 port %s\n" % self._socks_port)
+		self._f.write("# StemControllerPort %s\n" % self._controller_port)
+		self._f.write("# Destination %s:%s\n" % (self._destination_ip,self._destination_port))
+		self._f.write("# Source 173.67.5.95 VerizonFIOS Home EllicottCityMD\n")
+		self._f.write("# Mode %s\n" % self._mode)
+		if(self._optimize):
+			self._f.write("# Optimization Caching\n")
+		else:
+			self._f.write("# Optimization Off\n")
+		self._f.write("# BufferSize %s\n" % self._buffer_size)
+		self._f.write("# Tings %s\n" % self._num_tings)
+		self._f.write("# Pairs %s\n" % self._num_pairs)
+		self._f.write("# DataDirectory %s\n" % self._data_dir)
+		self._f.write("# DateTime %s\n" % str(datetime.datetime.now()))
+		self._f.write("--------------------------------\n")
+
+	# Circuit should be in the form [[fingerprint, ip],[..],...]
+	def writeNewCircuit(self, circuit):
+		self._f.write("## %s ##\n" % str(self._current_ting))
+		self._f.write("--Circuit:\n")
+		self._f.write("W %s %s\n" % (circuit[0][0], circuit[0][1]))
+		self._f.write("X %s %s\n" % (circuit[1][0], circuit[1][1]))
+		self._f.write("Y %s %s\n" % (circuit[2][0], circuit[2][1]))
+		self._f.write("Z %s %s\n" % (circuit[3][0], circuit[3][1]))
+		self._f.write("--Events:\n")
+		self._current_ting += 1
+
+	def writeNewEvent(self, time, pt, relays, data, elapsed):
+		event = "{0} [{1} {2}] {3}s\n\t{4}\n".format(time, pt, relays, elapsed, data)
+		self._f.write(event)
+
+	def closeFile(self):
+		self._f.close()
+
+
 """ 
 Contains all auxillary methods
 """
 class TingUtils:
-	def __init__(self, data_dir, destination_ip, destination_port):
+	def __init__(self, data_dir, destination_ip, destination_port, num_tings):
 		if(not data_dir[-1] is "/"):
 			self._data_dir = data_dir + "/"
 		else:
 			self._data_dir = data_dir
 		self._destination_ip = destination_ip
 		self._destination_port = destination_port
+		self._num_tings = num_tings
 		self.setup_data_dirs()
 		
 	def setup_data_dirs(self):
 		current_dir = os.path.dirname(os.path.realpath(__file__))
-		print (current_dir)
 		if(not os.path.exists(current_dir + "/" + self._data_dir + "nodes/")):
 			os.makedirs(current_dir + "/" + self._data_dir + "nodes/")
 		if(not os.path.exists(current_dir + "/" + self._data_dir + "tings/")):
 			os.makedirs(current_dir + "/" + self._data_dir + "tings/")
-
 
 		ip_underscore = self._destination_ip.replace(".", "_")
 		now = datetime.datetime.now()
@@ -64,22 +141,21 @@ class TingUtils:
 
 		filenum = 1
 		if(os.path.exists(first_sub)):
-			all_sub = [first_sub+"/"+d for d in os.listdir(first_sub)]
-			if not all_sub == []:
-				most_recent = max(all_sub, key=os.path.getmtime)
-				node_files = os.listdir(most_recent)
-				regex = re.compile("validexits_\d+_(\d+).txt")
-				filenums = []
-				for f in node_files:
-					filenums.append(int(regex.findall(f)[0]))
-				if not filenums == []:
-					filenum = max(filenums)
+				second_sub = first_sub + "/" + date_underscore
+				if(os.path.exists(second_sub)):
+					node_files = os.listdir(second_sub)
+					regex = re.compile("validexits_\d+_(\d+).txt")
+					filenums = []
+					for f in node_files:
+						if "validexits" in f:
+							filenums.append(int(regex.findall(f)[0]))
+					if not filenums == []:
+						filenum = max(filenums)
 
 		self._valid_exits_fname = "{0}nodes/{1}/{2}/validexits_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 		self._blacklist_fname = "{0}nodes/{1}/{2}/blacklist_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 
-	## REDO THIS
-	def make_title(self, socks_port, controller_port, dest_ip, dest_port, mode, mode_args, num_tings, num_pairs, buffer_size, data_dir, output, optimize):
+	def make_title(self, socks_port, controller_port, dest_ip, dest_port, mode, mode_args, num_tings, num_pairs, buffer_size, data_dir, optimize):
 		print("\n-----------------------------------")
 		print("	 _____ _		 \n	|_   _|_|___ ___ \n	  | | | |   | . |\n	  |_| |_|_|_|_  |\n		    |___|")
 		print("\n----------- Version 1.0 -----------")
@@ -103,13 +179,11 @@ class TingUtils:
 		elif(mode is 'rerun'):
 			print("Rerunning experiment conducted in: ", mode_args[0])
 		print("Data Directory:", data_dir)
-		print("Output File:", output)
 		print("-----------------------------------")
 
 	def get_valid_nodes(self):
 		exits = {}
 		# Open file or generate if it doesn't exist
-		print (self._valid_exits_fname)
 		try:
 			f = open(self._valid_exits_fname)
 		except IOError as exc:
@@ -150,9 +224,10 @@ class TingUtils:
 		if(relay in self._exits):
 			del(self._exits[name])
 
-	# Given an ip or address, uses standard ping, and returns a 4-element array of the min, avg, max, stddev
+	# Given a fp, uses standard ping, and returns a 4-element array of the min, avg, max, stddev
 	# If any pings timeout, reruns up to five times. After five tries, returns an empty array signaling failure
-	def ping(self, ip):
+	def ping(self, fp):
+		ip = self._exits[fp]
 		pings = []
 		attempts = 0
 		while((len(pings) < self._num_tings) and attempts < 5):
@@ -194,14 +269,14 @@ class TingUtils:
 	def pick_relays(self, n = 4, existing = []):
 		relays = [0 for x in range(n)]
 		for i in range(len(relays)):
-			temp = choice(self._exits)
+			temp = choice(self._exits.keys())
 			while(temp in relays or temp in existing):
-				temp = choice(self._exits)
+				temp = choice(self._exits.keys())
 			relays[i] = temp
 		return relays
 
 """
-Contains all methods necessary for creating and modifying circuits
+Creates and Modifies Circuits
 """
 class CircuitBuilder:
 	def __init__(self, controller, utils):
@@ -223,7 +298,7 @@ class CircuitBuilder:
 
 	# If circuit already exists, just return find and return id of it
 	def create_circuit(self, relays):
-		cid = circuit_exists(relays)
+		cid = self.circuit_exists(relays)
 		if cid is -1:
 			cid = self._controller.new_circuit(relays, await_build = True)
 		return cid
@@ -244,9 +319,9 @@ class CircuitBuilder:
 				sub_one = None
 				sub_two = None
 
-				full = create_circuit(relays)
-				sub_one = create_circuit(relays[:2])
-				sub_two = create_circuit(relays[-2:])
+				full = self.create_circuit(relays)
+				sub_one = self.create_circuit(relays[:2])
+				sub_two = self.create_circuit(relays[-2:])
 
 				return relays
 			except(InvalidRequest, CircuitExtensionFailed) as exc:
@@ -275,12 +350,12 @@ class Worker:
 		self._num_pairs = args['num_pairs']
 		self._mode = args['mode']
 		self._data_dir = args['data_dir']
-		self._output_file = args['output_file']
 		self._optimize = args['optimize']
+		self._verbose = args['verbose']
 
-		self._utils = TingUtils(self._data_dir, self._destination_ip, self._destination_port)
+		self._utils = TingUtils(self._data_dir, self._destination_ip, self._destination_port, self._num_tings)
 		self._builder = CircuitBuilder(controller, self._utils)
-
+		self._writer = OutputWriter(args)
 
 	# Tell socks to use tor as a proxy 
 	def setup_proxy(self):
@@ -305,7 +380,7 @@ class Worker:
 
 					start_time = time.time()
 					self._sock.send(msg)
-					data = self._sock.recv(BUFFER_SIZE)
+					data = self._sock.recv(self._buffer_size)
 					end_time = time.time()
 
 					arr[i] = (end_time-start_time)*1000
@@ -317,61 +392,82 @@ class Worker:
 			print("Failed to connect using the given circuit.", exc)
 
 	def find_r_xy(self, relays):
-
 		global curr_cid
 
 		count = 0
 		r_xd = []
+		start = time.time()
+		now = datetime.datetime.now()
 		while(len(r_xd) != int(self._num_tings)):
 			if(count is 3):
-				self._utils.add_to_blacklist(self._utils.exits[relays[1]])
+				self._utils.add_to_blacklist(self._utils._exits[relays[1]])
 				raise NotReachableException
-
 			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			s.connect((self._destination_ip, self._destination_port))
-			msg = "ping {0}".format(self._utils.exits[relays[1]])
+			msg = "ping {0} {1}".format(self._utils._exits[relays[1]], self._num_tings)
 			s.send(msg)
 			response = s.recv(1024)
 			r_xd = self._utils.deserialize_ping_data(response)
-
 			if(len(r_xd) < 1):
 				raise NotReachableException
-			
 			count = count + 1
-		# PRINT STUFF ABOUT RXD HERE
-		# WRITE RXD TO FILE HERE
+		end = time.time()
+		elapsed = end - start
+		self._writer.writeNewEvent(now, "ping", "X,D", str(r_xd), elapsed)
+		if(self._verbose):
+			print("RXD: " + str(r_xd))
 
 		count = 0
 		r_sy = []
+		start = time.time()
+		now = datetime.datetime.now()
 		while(len(r_sy) != int(self._num_tings)):
 			if(count is 3):
-				self._utils.add_to_blacklist(self._utils.exits[relays[2]])
+				self._utils.add_to_blacklist(self._utils._exits[relays[2]])
 				raise NotReachableException
 
-			r_sy = ping(exits[relays[2]])
+			r_sy = self._utils.ping(relays[2])
 
 			if(len(r_sy) < 1):
 				raise NotReachableException
 
 			count = count + 1
+		end = time.time()
+		elapsed = end - start
+		self._writer.writeNewEvent(now, "ping", "S,Y", str(r_sy), elapsed)
+		if(self._verbose):
+			print("RSY: " + str(r_sy))
 
-		## PRINT STUFF ABOUT RSY HERE
-		# WRITE RSY TO FILE HERE
-
+        ## PRINT STUFF ABOUT RSY HERE
+        # WRITE RSY TO FILE HERE
 		circuits = [full, sub_one, sub_two]
+		paths = ["S,W,X,Y,Z,D", "S,W,X,D", "S,Y,Z,D"]
+		path = 0
 		tings = {}
 		for cid in circuits:
 			curr_cid = cid
-			sock = self.setup_proxy()
+			if(self._verbose):
+				print("CID: " + cid)
+			self._sock = self.setup_proxy()
+			start = time.time()
+			now = datetime.datetime.now()
 			tings[cid] = self.ting()
-			sock = sock.close()
+			self._sock = self._sock.close()
+			end = time.time()
+			elapsed = end - start
+			self._writer.writeNewEvent(now, "ting", paths[path], str(tings[cid]), elapsed)
+			path += 1
+			if(self._verbose):
+				print(tings[cid])
 			## PRINT AND WRITE TO FILE
 
 		r_xy = [0 for x in range(int(self._num_tings))]
 		for i in range(len(r_xy)):
-			r_xy[i] = tings[full] - tings[sub_one] - tings[sub_two] + r_sy[i] + r_xd[i]
+			r_xy[i] = tings[full][i] - tings[sub_one][i] - tings[sub_two][i] + r_sy[i] + r_xd[i]
 
-		stats = self._util.get_stats(r_xy)
+		if(self._verbose):
+			print ("RXY: " + str(r_xy))
+		#stats = self._util.get_stats(r_xy)
 		## PRINT AND WRITE TO FILE
 
 	def start(self):
@@ -379,17 +475,25 @@ class Worker:
 		controller = self._controller
 		utils = self._utils
 		builder = self._builder
+		writer = self._writer
 
 		exits = utils.get_valid_nodes()
-		print(exits)
+
+		relays = utils.pick_relays()
+		writer.createFile()
+		circuit = []
+		for relay in relays:
+			circuit.append([relay, utils._exits[relay]])
+		writer.writeNewCircuit(circuit)
+
+		builder.build_circuits(relays)
 
 		controller.add_event_listener(self._probe_stream, EventType.STREAM)
-		#utils.make_title(self._socks_port, self._controller_port, self._destination_ip, self._destination_port, self._mode, mode_args, self._num_tings, self._num_pairs, self._buffer_size, self._data_dir, self._output_file, self._optimize)
 
-
-		#relays = utils.pick_relays
+		self.find_r_xy(relays)
 
 		controller.close()
+		writer.closeFile()
 
 def main():
 	parser = argparse.ArgumentParser(prog='Ting', description='Ting is like ping, but instead measures round-trip times between two indivudal nodes in the Tor network.')
@@ -401,10 +505,9 @@ def main():
 	parser.add_argument('-sp', '--socks-port', help="Specify SOCKS port.", default=9050)
 	parser.add_argument('-b', '--buffer-size', help="Specify number of bytes to be sent in each Ting.", default=64)
 	parser.add_argument('-p', '--num-tings', help="Specify the number of times to ping each circuit.", default=20)
-	parser.add_argument('-out', '--output-file', help="Specify where to save log file.", default="")
 	parser.add_argument('-d', '--data-dir', help="Specify a different home directory from which to read and write data", default="data/")
 	parser.add_argument('-o', '--optimize', help="Cache ping results from S and D to decrease running time", action='store_true')
-	parser.add_argument('-v', '--verbose', help="Print results along the way.", default='store_false')
+	parser.add_argument('-v', '--verbose', help="Print all results and stream statuses along the way.", action='store_true')
 	args = vars(parser.parse_args())
 
 	controller = Controller.from_port(port = args['controller_port'])
@@ -431,7 +534,8 @@ def main():
 
 	# An event listener, called whenever StreamEvent status changes
 	def probe_stream(event):
-		print("Probe stream: status={0} purpose={1}".format(event.status, event.purpose))
+		if(args['verbose']):
+			print("Probe stream: status={0} purpose={1}".format(event.status, event.purpose))
 		if event.status == 'NEW' and event.purpose == 'USER':
 			attach_stream(event)
 
