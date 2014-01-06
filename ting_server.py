@@ -1,6 +1,7 @@
 import SocketServer
 import re
 import subprocess
+import sys
 
 class MyTCPHandler(SocketServer.BaseRequestHandler):
     """
@@ -34,11 +35,11 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
 
         if('ping' in self.data):
             self.num_pings = int(self.ping_num_regex.findall(self.data)[0])
-            ip = int(self.ping_ip_regex.findall(self.data)[0])
+            ip = self.ping_ip_regex.findall(self.data)[0]
 
             print "Pinging", ip, "(X)", self.num_pings, "times..."
             result = self.ping(ip)
-            print "\tData:", result
+            print "Data:", result
 
             self.request.sendall(str(result))
 
@@ -50,17 +51,20 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
 
             for i in range(self.num_pings):
                 self.data = self.request.recv(64).strip()
-                print "Recieved ting", i, "from", self.client_address[0]
-                print self.data
+                print("\r"),
+                print("Recieved ting " + str(i) + " from " + self.client_address[0]),
+                sys.stdout.flush()
                 self.request.sendall("echo")
+            print("\n")
 
 if __name__ == "__main__":
     TCP_IP = '128.8.126.92'
     TCP_PORT = 6667
-    print("TCP server listening on port" + str(TCP_PORT))
+    print("TCP server listening on port " + str(TCP_PORT))
     # Create the server, binding to localhost on port TCP_PORT
     server = SocketServer.TCPServer((TCP_IP, TCP_PORT), MyTCPHandler)
 
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C
     server.serve_forever()
+
