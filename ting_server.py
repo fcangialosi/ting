@@ -49,7 +49,7 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
             print "Getting ready to echo"
             self.request.sendall("OKAY")
 
-            for i in range(self.num_pings):
+            for i in range(1, self.num_pings+1):
                 self.data = self.request.recv(64).strip()
                 print("\r"),
                 print("Recieved ting " + str(i) + " from " + self.client_address[0]),
