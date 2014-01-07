@@ -4,7 +4,7 @@ import socket
 from stem import CircStatus, OperationFailed, InvalidRequest, InvalidArguments, CircuitExtensionFailed
 from stem.control import Controller, EventType
 import sys
-from random import choice
+from random import choice, shuffle
 import os
 import subprocess
 from pprint import pprint 
@@ -54,6 +54,8 @@ class OutputWriter:
 		now = datetime.datetime.now()
 		self._ting_dir = args['data_dir'] + "tings/" + "{0}_{1}_{2}".format(now.month, now.day, now.year) + "/"
 		self._optimize = args['optimize']
+		self._pair = args['pair']
+
 		self._current_ting = 1
 
 	def createFile(self):
@@ -78,7 +80,7 @@ class OutputWriter:
 	def writeFileHeader(self):
 		self._f.write("### Ting " + version + " Log ###\n")
 		self._f.write("--------------------------------\n")
-		self._f.write("# SOCKS5 port %s\n" % self._socks_port)
+		self._f.write("# SOCKS5Port %s\n" % self._socks_port)
 		self._f.write("# StemControllerPort %s\n" % self._controller_port)
 		self._f.write("# Destination %s:%s\n" % (self._destination_ip,self._destination_port))
 		self._f.write("# Source 173.67.5.95 VerizonFIOS Home EllicottCityMD\n")
@@ -95,13 +97,13 @@ class OutputWriter:
 		self._f.write("--------------------------------\n")
 
 	# Circuit should be in the form [[fingerprint, ip],[..],...]
-	def writeNewCircuit(self, circuit):
+	def writeNewCircuit(self, circuit, exits):
 		self._f.write("## %s ##\n" % str(self._current_ting))
 		self._f.write("--Circuit:\n")
-		self._f.write("W %s %s\n" % (circuit[0][0], circuit[0][1]))
-		self._f.write("X %s %s\n" % (circuit[1][0], circuit[1][1]))
-		self._f.write("Y %s %s\n" % (circuit[2][0], circuit[2][1]))
-		self._f.write("Z %s %s\n" % (circuit[3][0], circuit[3][1]))
+		self._f.write("W %s %s\n" % (circuit[0], exits[circuit[0]]))
+		self._f.write("X %s %s\n" % (circuit[1], exits[circuit[1]]))
+		self._f.write("Y %s %s\n" % (circuit[2], exits[circuit[2]]))
+		self._f.write("Z %s %s\n" % (circuit[3], exits[circuit[3]]))
 		self._f.write("--Events:\n")
 		self._current_ting += 1
 
@@ -155,30 +157,29 @@ class TingUtils:
 		self._valid_exits_fname = "{0}nodes/{1}/{2}/validexits_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 		self._blacklist_fname = "{0}nodes/{1}/{2}/blacklist_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 
-	def make_title(self, socks_port, controller_port, dest_ip, dest_port, mode, mode_args, num_tings, num_pairs, buffer_size, data_dir, optimize):
+	def make_title(self, args):
 		print("\n-----------------------------------")
 		print("	 _____ _		 \n	|_   _|_|___ ___ \n	  | | | |   | . |\n	  |_| |_|_|_|_  |\n		    |___|")
 		print("\n----------- Version 1.0 -----------")
-		print("SOCKS Port:", socks_port)
-		print("Stem Controller Port:", controller_port)
-		print("Destination: {0}:{1}".format(dest_ip, dest_port))
-		print(mode, "mode")
-		if(optimization):
+		print("SOCKS Port:", args['socks_port'])
+		print("Stem Controller Port:", args['controller_port'])
+		print("Destination: {0}:{1}".format(args['destination_ip'], args['destination_port']))
+		print("Mode", args['mode'])
+		if(args['optimize']):
 			print("\tCaching turned on")
-		print("Each circuit will transfer {0} {1}-byte packets".format(num_tings, buffer_size))
-		if(mode is 'accuracy'):
-			print("\tX:", mode_args[0])
-			print("\tY:", mode_args[1])
-			print(num_pairs, "random pairs of W and Z")
-			print("")
-		elif(mode is 'check'):
-			print("\tX:", mode_args[0])
-			print("\tY:", mode_args[1])
-		elif(mode is 'random'):
-			print("Measuring all {0} combinations of {1} random pairs".format((num_pairs*(num_pairs-1)/2),num_pairs))
-		elif(mode is 'rerun'):
-			print("Rerunning experiment conducted in: ", mode_args[0])
-		print("Data Directory:", data_dir)
+		print("Each circuit will transfer {0} {1}-byte packets".format(args['num_tings'], args['buffer_size']))
+		if(args['mode'] == 'verify'):
+			print("\tX:", args['pair'][0])
+			print("\tY:", args['pair'][1])
+			print(args['num_pairs'], "random pairs of W and Z")
+		elif(args['mode'] == 'check'):
+			print("\tX:", args['pair'][0])
+			print("\tY:", args['pair'][1])
+		elif(args['mode'] == 'random'):
+			print("Measuring all {0} combinations of {1} random pairs".format((args['num_pairs']*(args['num_pairs']-1)/2),args['num_pairs']))
+		elif(args['mode'] == 'rerun'):
+			print("Rerunning experiment conducted in: ", args['rerun'])
+		print("Data Directory:", args['data_dir'])
 		print("-----------------------------------")
 
 	def get_valid_nodes(self):
@@ -193,8 +194,8 @@ class TingUtils:
 			p = subprocess.Popen(cmd, shell=False)
 			p.communicate()
 			p.wait()
+			f = open(self._valid_exits_fname)
 
-		f = open(self._valid_exits_fname)
 		escapes = ["#", "\t", "\n"]
 		for line in f.readlines():
 			if(not line[0] in escapes):
@@ -275,6 +276,17 @@ class TingUtils:
 			relays[i] = temp
 		return relays
 
+	def get_random_pairs(self, num_pairs):
+		fps = self._exits.keys()[:num_pairs]
+		pairs = []
+		for i in range(num_pairs):
+			j = i+1
+			while(j < num_pairs):
+				pairs.append([fps[i], fps[j]])
+				j += 1
+		shuffle(pairs)	
+		return pairs
+
 """
 Creates and Modifies Circuits
 """
@@ -307,6 +319,7 @@ class CircuitBuilder:
 	# If no relays given, 4 are chosen at random
 	# Returns the list of relays used in building circuits
 	def build_circuits(self, relays = []):
+		print("[{0}] Choosing relays..".format(str(datetime.datetime.now())))
 		while True:
 			try:
 				if not relays: 
@@ -322,6 +335,7 @@ class CircuitBuilder:
 				full = self.create_circuit(relays)
 				sub_one = self.create_circuit(relays[:2])
 				sub_two = self.create_circuit(relays[-2:])
+				print("[{0}] All circuits built successfully.".format(str(datetime.datetime.now())))
 
 				return relays
 			except(InvalidRequest, CircuitExtensionFailed) as exc:
@@ -347,15 +361,18 @@ class Worker:
 		self._destination_ip = args['destination_ip']
 		self._destination_port = args['destination_port']
 		self._num_tings = args['num_tings']
-		self._num_pairs = args['num_pairs']
+		self._num_pairs = int(args['num_pairs'])
 		self._mode = args['mode']
 		self._data_dir = args['data_dir']
 		self._optimize = args['optimize']
 		self._verbose = args['verbose']
+		self._pair = args['pair']
 
 		self._utils = TingUtils(self._data_dir, self._destination_ip, self._destination_port, self._num_tings)
 		self._builder = CircuitBuilder(controller, self._utils)
 		self._writer = OutputWriter(args)
+
+		self._utils.make_title(args)
 
 	# Tell socks to use tor as a proxy 
 	def setup_proxy(self):
@@ -373,7 +390,7 @@ class Worker:
 			self._sock.send(msg)
 			data = self._sock.recv(self._buffer_size)
 			if data == "OKAY":
-				for i in range(int(self._num_tings)):
+				for i in range(1, int(self._num_tings)+1):
 					msg = str(time.time())
 					print('{0} bytes to {1}: ping_num={2}'.format(self._buffer_size,self._destination_ip,i), end='\r')
 					sys.stdout.flush()
@@ -383,21 +400,23 @@ class Worker:
 					data = self._sock.recv(self._buffer_size)
 					end_time = time.time()
 
-					arr[i] = (end_time-start_time)*1000
+					arr[i-1] = (end_time-start_time)*1000
 			self._sock.close()
-			print('Finished {0} pings to {1}'.format(self._num_tings,self._destination_ip))
-
+			print('[{0}] Finished {1} pings to {2}'.format(str(datetime.datetime.now()), self._num_tings,self._destination_ip))
 			return arr
 		except TypeError as exc:
 			print("Failed to connect using the given circuit.", exc)
 
 	def find_r_xy(self, relays):
 		global curr_cid
-
 		count = 0
 		r_xd = []
+		r_sy = []
+
 		start = time.time()
 		now = datetime.datetime.now()
+		print("[{0}] Waiting for D to ping X..".format(now))
+
 		while(len(r_xd) != int(self._num_tings)):
 			if(count is 3):
 				self._utils.add_to_blacklist(self._utils._exits[relays[1]])
@@ -407,20 +426,27 @@ class Worker:
 			msg = "ping {0} {1}".format(self._utils._exits[relays[1]], self._num_tings)
 			s.send(msg)
 			response = s.recv(1024)
+			s.close()
 			r_xd = self._utils.deserialize_ping_data(response)
 			if(len(r_xd) < 1):
+				self._utils.add_to_blacklist(self._utils._exits[relays[1]])
 				raise NotReachableException
 			count = count + 1
+
 		end = time.time()
 		elapsed = end - start
 		self._writer.writeNewEvent(now, "ping", "X,D", str(r_xd), elapsed)
 		if(self._verbose):
 			print("RXD: " + str(r_xd))
+		print("[{0}] Successfully received ping data from D.".format(str(datetime.datetime.now())))
+
 
 		count = 0
-		r_sy = []
+		
 		start = time.time()
 		now = datetime.datetime.now()
+		print("[{0}] Pinging Y from S..".format(str(datetime.datetime.now())))
+
 		while(len(r_sy) != int(self._num_tings)):
 			if(count is 3):
 				self._utils.add_to_blacklist(self._utils._exits[relays[2]])
@@ -429,6 +455,7 @@ class Worker:
 			r_sy = self._utils.ping(relays[2])
 
 			if(len(r_sy) < 1):
+				self._utils.add_to_blacklist(self._utils._exits[relays[2]])
 				raise NotReachableException
 
 			count = count + 1
@@ -437,17 +464,18 @@ class Worker:
 		self._writer.writeNewEvent(now, "ping", "S,Y", str(r_sy), elapsed)
 		if(self._verbose):
 			print("RSY: " + str(r_sy))
+		print("[{0}] Ping successful.".format(str(datetime.datetime.now())))
 
-        ## PRINT STUFF ABOUT RSY HERE
-        # WRITE RSY TO FILE HERE
 		circuits = [full, sub_one, sub_two]
 		paths = ["S,W,X,Y,Z,D", "S,W,X,D", "S,Y,Z,D"]
-		path = 0
+		index = 0
 		tings = {}
+
+		# Ting the 3 tor circuits
 		for cid in circuits:
 			curr_cid = cid
-			if(self._verbose):
-				print("CID: " + cid)
+			print("[{0}] Beginning {1} Ting (CID {2})".format(str(datetime.datetime.now()),paths[index],cid))
+
 			self._sock = self.setup_proxy()
 			start = time.time()
 			now = datetime.datetime.now()
@@ -455,20 +483,16 @@ class Worker:
 			self._sock = self._sock.close()
 			end = time.time()
 			elapsed = end - start
-			self._writer.writeNewEvent(now, "ting", paths[path], str(tings[cid]), elapsed)
-			path += 1
-			if(self._verbose):
-				print(tings[cid])
-			## PRINT AND WRITE TO FILE
 
-		r_xy = [0 for x in range(int(self._num_tings))]
-		for i in range(len(r_xy)):
-			r_xy[i] = tings[full][i] - tings[sub_one][i] - tings[sub_two][i] + r_sy[i] + r_xd[i]
+			self._writer.writeNewEvent(now, "ting", paths[index], str(tings[cid]), elapsed)
+			index += 1
+			if(self._verbose):
+				print("Data: {0}\n".format(str(tings[cid])))
 
 		if(self._verbose):
-			print ("RXY: " + str(r_xy))
-		#stats = self._util.get_stats(r_xy)
-		## PRINT AND WRITE TO FILE
+			r_xy = min(tings[full]) - min(tings[sub_one]) - min(tings[sub_two]) + min(r_xd) + min(r_sy)
+			print("[{0}] Calculated R_XY using mins".format(str(datetime.datetime.now())))
+			print ("RXY ~ " + str(r_xy))
 
 	def start(self):
 
@@ -477,38 +501,124 @@ class Worker:
 		builder = self._builder
 		writer = self._writer
 
-		exits = utils.get_valid_nodes()
-
-		relays = utils.pick_relays()
+		utils.get_valid_nodes()
 		writer.createFile()
-		circuit = []
-		for relay in relays:
-			circuit.append([relay, utils._exits[relay]])
-		writer.writeNewCircuit(circuit)
 
-		builder.build_circuits(relays)
+		if(self._mode == 'verify'):
+			counter = 0
+			while(counter < self._num_pairs):
+				if(not self._pair[0] == "Not specified"):
+					wz = utils.pick_relays(n=2, existing=self._pair)
+					relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
+				else:
+					relays = utils.pick_relays()
+			
+				writer.writeNewCircuit(relays, utils._exits)
+				builder.build_circuits(relays)
 
-		controller.add_event_listener(self._probe_stream, EventType.STREAM)
+				controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
-		self.find_r_xy(relays)
+				try:
+					self.find_r_xy(relays)
+					counter += 1 # Increment only if tings were successful
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
+					print("[ERROR]: " + str(exc))
+
+		elif(self._mode == 'check'):
+			success = False
+			while(not success):
+				wz = utils.pick_relays(n=2, existing=self._pair)
+				relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
+
+				writer.writeNewCircuit(relays, utils._exits)
+				builder.build_circuits(relays)
+
+				controller.add_event_listener(self._probe_stream, EventType.STREAM)
+
+				try:
+					self.find_r_xy(relays)
+					success = True
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
+					print("[ERROR]: " + str(exc))
+
+		elif(self._mode == 'pairs'):
+			pairs = utils.get_random_pairs(self._num_pairs)
+
+			for pair in pairs:
+				try:
+					wz = utils.pick_relays(n=2, existing=pair)
+					relays = [wz[0],pair[0],pair[1],wz[1]]
+
+					writer.writeNewCircuit(relays, utils._exits)
+					builder.build_circuits(relays)
+
+					controller.add_event_listener(self._probe_stream, EventType.STREAM)
+
+					self.find_r_xy(relays)
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
+					print("[ERROR]: " + str(exc))
 
 		controller.close()
 		writer.closeFile()
+		sys.exit(1)
 
 def main():
 	parser = argparse.ArgumentParser(prog='Ting', description='Ting is like ping, but instead measures round-trip times between two indivudal nodes in the Tor network.')
-	parser.add_argument('mode', help="Specify running mode.", choices=['accuracy', 'check', 'pairs', 'rerun'], default='pairs')
-	parser.add_argument('-n', '--num-pairs', help="Number of pairs to test. Defaults to 100.", default=100)
+	parser.add_argument('mode', help="Specify running mode.", choices=['verify', 'check', 'pairs', 'rerun'], default='pairs')
+	parser.add_argument('-np', '--num-pairs', help="Number of pairs to test. Defaults to 100.", default=100)
+	parser.add_argument('-p', '--pair', help="Specify a specific pair of X and Y for check one or verification", nargs=2)
+	parser.add_argument('-r', '--rerun', help="Specify the data file of an experiment to be rerun")
 	parser.add_argument('-dp', '--destination-port', help="Specify destination port.",default=6667)
 	parser.add_argument('-di', '--destination-ip', help="Specify destination ip address.", default='128.8.126.92')
 	parser.add_argument('-cp', '--controller-port', help="Specify port of Stem controller.", default=9051)
 	parser.add_argument('-sp', '--socks-port', help="Specify SOCKS port.", default=9050)
 	parser.add_argument('-b', '--buffer-size', help="Specify number of bytes to be sent in each Ting.", default=64)
-	parser.add_argument('-p', '--num-tings', help="Specify the number of times to ping each circuit.", default=20)
+	parser.add_argument('-nt', '--num-tings', help="Specify the number of times to ping each circuit.", default=20)
 	parser.add_argument('-d', '--data-dir', help="Specify a different home directory from which to read and write data", default="data/")
 	parser.add_argument('-o', '--optimize', help="Cache ping results from S and D to decrease running time", action='store_true')
 	parser.add_argument('-v', '--verbose', help="Print all results and stream statuses along the way.", action='store_true')
 	args = vars(parser.parse_args())
+
+	if(args['mode'] == 'check' and args['pair'] is None):
+		print("[ERROR]: Check requires the -p (--pair) parameter. \nUSAGE: -p RELAY_X RELAY_Y")
+		sys.exit(1)
+	if(args['mode'] == 'verify' and args['pair'] is None):
+		print("[WARN]: X and Y were not specified, choosing them at random. It is recommended that you specify known reliable X and Y relays.\n")
+		args['pair'] = ['Not specified', 'Not specified']
+	if(args['mode'] == 'rerun'):
+		if(args['rerun'] is None):
+			print("[ERROR]: Rerun requires the -r parameter to specify which experiment to rerun. \nUSAGE: -r DATA_FILE")
+			sys.exit(1)
+		try:
+			f = open(args['rerun'])
+		except IOError as exc:
+			print("Couldn't find rerun file.")
+			sys.exit(1)
+
+		lines = f.readlines()
+		params = []
+		for line in lines:
+			if line[0:2] == '# ':
+				params.append(line[2:].strip().split()[1])
+		f.close()
+
+		args['socks_port'] = int(params[0])
+		args['controller_port'] = int(params[1])
+		args['destination_ip'] = params[2].split(":")[0]
+		args['destination_port'] = int(params[2].split(":")[1])
+		args['mode'] = params[4]
+		if(params[5] == "Off"):
+			args['optimization'] = False
+		else:
+			args['optimization'] = True
+		args['buffer_size'] = int(params[6])
+		args['num_tings'] = int(params[7])
+		args['num_pairs'] = int(params[8])
+		args['data_dir'] = params[9]
+
+		if(args['mode'] == 'verify' and args['pair'] is None):
+			print("WARN: X and Y were not specified, choosing them at random. It is recommended that you specify known reliable X and Y relays.\n")
+			args['pair'] = ['Not specified', 'Not specified']
 
 	controller = Controller.from_port(port = args['controller_port'])
 	if not controller:

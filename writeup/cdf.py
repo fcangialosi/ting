@@ -2,7 +2,6 @@ import numpy as np
 import statsmodels.api as sm # recommended import according to the docs
 import matplotlib.pyplot as plt
 import re
-import numpy as np
 
 f = open("../data/graph_cp")
 r = f.readlines()
