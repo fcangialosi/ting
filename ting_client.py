@@ -61,7 +61,7 @@ class OutputWriter:
 	def createFile(self):
 		current_dir = os.path.dirname(os.path.realpath(__file__))
 		first_sub = current_dir + "/" + self._ting_dir
-		filenum = 1
+		filenum = 0
 		if(not os.path.exists(first_sub)):
 			os.makedirs(first_sub)
 		else:
@@ -72,7 +72,7 @@ class OutputWriter:
 				filenums.append(int(regex.findall(f)[0]))
 			if not filenums == []:
 				filenum = max(filenums)
-		self._output_file = self._ting_dir + "/ting_{0}_{1}.txt".format(self._mode,filenum)
+		self._output_file = self._ting_dir + "/ting_{0}_{1}.txt".format(self._mode,filenum+1)
 		self._f = open(self._output_file, 'a')
 
 		self.writeFileHeader()
@@ -98,7 +98,7 @@ class OutputWriter:
 
 	# Circuit should be in the form [[fingerprint, ip],[..],...]
 	def writeNewCircuit(self, circuit, exits):
-		self._f.write("## %s ##\n" % str(self._current_ting))
+		self._f.write("\n## %s ##\n" % str(self._current_ting))
 		self._f.write("--Circuit:\n")
 		self._f.write("W %s %s\n" % (circuit[0], exits[circuit[0]]))
 		self._f.write("X %s %s\n" % (circuit[1], exits[circuit[1]]))
@@ -141,7 +141,7 @@ class TingUtils:
 		date_underscore = "{0}_{1}_{2}".format(now.month, now.day, now.year)
 		first_sub = current_dir + "/data/nodes/%s" % ip_underscore
 
-		filenum = 1
+		filenum = 0
 		if(os.path.exists(first_sub)):
 				second_sub = first_sub + "/" + date_underscore
 				if(os.path.exists(second_sub)):
@@ -412,6 +412,7 @@ class Worker:
 		count = 0
 		r_xd = []
 		r_sy = []
+		events = []
 
 		start = time.time()
 		now = datetime.datetime.now()
@@ -435,7 +436,7 @@ class Worker:
 
 		end = time.time()
 		elapsed = end - start
-		self._writer.writeNewEvent(now, "ping", "X,D", str(r_xd), elapsed)
+		events.append((now, "ping", "X,D", str(r_xd), elapsed))
 		if(self._verbose):
 			print("RXD: " + str(r_xd))
 		print("[{0}] Successfully received ping data from D.".format(str(datetime.datetime.now())))
@@ -461,7 +462,7 @@ class Worker:
 			count = count + 1
 		end = time.time()
 		elapsed = end - start
-		self._writer.writeNewEvent(now, "ping", "S,Y", str(r_sy), elapsed)
+		events.append((now, "ping", "S,Y", str(r_sy), elapsed))
 		if(self._verbose):
 			print("RSY: " + str(r_sy))
 		print("[{0}] Ping successful.".format(str(datetime.datetime.now())))
@@ -484,7 +485,7 @@ class Worker:
 			end = time.time()
 			elapsed = end - start
 
-			self._writer.writeNewEvent(now, "ting", paths[index], str(tings[cid]), elapsed)
+			events.append((now, "ting", paths[index], str(tings[cid]), elapsed))
 			index += 1
 			if(self._verbose):
 				print("Data: {0}\n".format(str(tings[cid])))
@@ -513,14 +514,17 @@ class Worker:
 				else:
 					relays = utils.pick_relays()
 			
-				writer.writeNewCircuit(relays, utils._exits)
 				builder.build_circuits(relays)
 
 				controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
 				try:
-					self.find_r_xy(relays)
-					counter += 1 # Increment only if tings were successful
+					events = self.find_r_xy(relays)
+					# Write data to file and increment counter only if tings were successful 
+					writer.writeNewCircuit(relays, utils._exits)
+					for event in events:
+						writer.writeNewEvent(*event)
+					counter += 1
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
 					print("[ERROR]: " + str(exc))
 
@@ -530,13 +534,16 @@ class Worker:
 				wz = utils.pick_relays(n=2, existing=self._pair)
 				relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
 
-				writer.writeNewCircuit(relays, utils._exits)
 				builder.build_circuits(relays)
 
 				controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
 				try:
-					self.find_r_xy(relays)
+					events = self.find_r_xy(relays)
+					# Write data to file and increment counter only if tings were successful 
+					writer.writeNewCircuit(relays, utils._exits)
+					for event in events:
+						writer.writeNewEvent(*event)
 					success = True
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
 					print("[ERROR]: " + str(exc))
@@ -549,18 +556,21 @@ class Worker:
 					wz = utils.pick_relays(n=2, existing=pair)
 					relays = [wz[0],pair[0],pair[1],wz[1]]
 
-					writer.writeNewCircuit(relays, utils._exits)
 					builder.build_circuits(relays)
 
 					controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
-					self.find_r_xy(relays)
+					events = self.find_r_xy(relays)
+
+					# Write data to file and increment counter only if tings were successful 
+					writer.writeNewCircuit(relays, utils._exits)
+					for event in events:
+						writer.writeNewEvent(*event)
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
 					print("[ERROR]: " + str(exc))
 
 		controller.close()
 		writer.closeFile()
-		sys.exit(1)
 
 def main():
 	parser = argparse.ArgumentParser(prog='Ting', description='Ting is like ping, but instead measures round-trip times between two indivudal nodes in the Tor network.')
@@ -656,8 +666,6 @@ def main():
 
 	w = Worker(controller, probe_stream, args)
 	w.start()
-
-	# DON'T FORGET TO CLOSE CONTROLLER!
 
 if __name__ == "__main__":
 	main()
