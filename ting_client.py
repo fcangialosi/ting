@@ -96,20 +96,33 @@ class OutputWriter:
 		self._f.write("# DateTime %s\n" % str(datetime.datetime.now()))
 		self._f.write("--------------------------------\n")
 
+	def writeNewIteration(self):
+		self._f.write("\n## %s ##\n" % str(self._current_ting))
+		print("------- {0} -------".format(self._current_ting))
+		self._current_ting += 1
+
 	# Circuit should be in the form [[fingerprint, ip],[..],...]
 	def writeNewCircuit(self, circuit, exits):
-		self._f.write("\n## %s ##\n" % str(self._current_ting))
 		self._f.write("--Circuit:\n")
 		self._f.write("W %s %s\n" % (circuit[0], exits[circuit[0]]))
 		self._f.write("X %s %s\n" % (circuit[1], exits[circuit[1]]))
 		self._f.write("Y %s %s\n" % (circuit[2], exits[circuit[2]]))
 		self._f.write("Z %s %s\n" % (circuit[3], exits[circuit[3]]))
 		self._f.write("--Events:\n")
-		self._current_ting += 1
-
+		
 	def writeNewEvent(self, time, pt, relays, data, elapsed):
 		event = "{0} [{1} {2}] {3}s\n\t{4}\n".format(time, pt, relays, elapsed, data)
 		self._f.write(event)
+
+	def writeCircuitBuildError(self, which, relays):
+		event = "[{0}] Failed to build circuit {1}\n\tRelays: {2}\n".format(str(datetime.datetime.now()), which, relays)
+		print(event)
+		self._f.write(event)
+
+	def writeNewException(self, exc):
+		event = "[{0}] {1} thrown. \n\tDetails: {2}".format(str(datetime.datetime.now()), exc.__clas__.__name__, exc.__dict__)
+		print(event)
+		self._f.write()
 
 	def closeFile(self):
 		self._f.close()
@@ -292,9 +305,10 @@ class TingUtils:
 Creates and Modifies Circuits
 """
 class CircuitBuilder:
-	def __init__(self, controller, utils):
+	def __init__(self, controller, utils, writer):
 		self._controller = controller
 		self._utils = utils
+		self._writer = writer
 
 	# Check list of circuits to see if one with the same relays already exists
 	def circuit_exists(self, relays):
@@ -333,12 +347,15 @@ class CircuitBuilder:
 				sub_one = None
 				sub_two = None
 
+				failed_creating = "W,X,Y,Z"
 				full = self.create_circuit(relays)
+				failed_creating = "W,X"
 				sub_one = self.create_circuit(relays[:2])
+				failed_creating = "Y,Z"
 				sub_two = self.create_circuit(relays[-2:])
 				print("[{0}] All circuits built successfully.".format(str(datetime.datetime.now())))
-
 				return relays
+
 			except(InvalidRequest, CircuitExtensionFailed) as exc:
 				if full is not None:
 					self._controller.close_circuit(full)
@@ -346,6 +363,8 @@ class CircuitBuilder:
 					self._controller.close_circuit(sub_one)
 				if sub_two is not None:
 					self._controller.close_circuit(sub_two)
+				self._writer.writeCircuitBuildError(failed_creating, relays)
+				relays = [] 
 
 """
 Controller class that does all of the work
@@ -370,8 +389,9 @@ class Worker:
 		self._pair = args['pair']
 
 		self._utils = TingUtils(self._data_dir, self._destination_ip, self._destination_port, self._num_tings)
-		self._builder = CircuitBuilder(controller, self._utils)
 		self._writer = OutputWriter(args)
+		self._builder = CircuitBuilder(controller, self._utils, self._writer)
+		
 
 		self._utils.make_title(args)
 
@@ -518,19 +538,21 @@ class Worker:
 					relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
 				else:
 					relays = utils.pick_relays()
-			
-				builder.build_circuits(relays)
 
-				try:
-					writer.writeNewCircuit(relays, utils._exits)
+				writer.writeNewIteration()
+				builder.build_circuits(relays)
+				writer.writeNewCircuit(relays, utils._exits)
+
+				try:	
 					events = self.find_r_xy(relays)
 					# Write data to file and increment counter only if tings were successful 
 					
 					for event in events:
 						writer.writeNewEvent(*event)
 					counter += 1
-				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[ERROR]: " + str(exc))
+					writer.writeNewException(exc)
 
 		elif(self._mode == 'check'):
 			success = False
@@ -538,17 +560,20 @@ class Worker:
 				wz = utils.pick_relays(n=2, existing=self._pair)
 				relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
 
+				writer.writeNewIteration()
 				builder.build_circuits(relays)
+				writer.writeNewCircuit(relays, utils._exits)
 
 				try:
 					events = self.find_r_xy(relays)
 					# Write data to file and increment counter only if tings were successful 
-					writer.writeNewCircuit(relays, utils._exits)
+					
 					for event in events:
 						writer.writeNewEvent(*event)
 					success = True
-				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[ERROR]: " + str(exc))
+					writer.writeNewException(exc)
 
 		elif(self._mode == 'pairs'):
 			pairs = utils.get_random_pairs(self._num_pairs)
@@ -558,16 +583,19 @@ class Worker:
 					wz = utils.pick_relays(n=2, existing=pair)
 					relays = [wz[0],pair[0],pair[1],wz[1]]
 
+					writer.writeNewIteration()
 					builder.build_circuits(relays)
+					writer.writeNewCircuit(relays, utils._exits)
 
 					events = self.find_r_xy(relays)
 
 					# Write data to file and increment counter only if tings were successful 
-					writer.writeNewCircuit(relays, utils._exits)
+					
 					for event in events:
 						writer.writeNewEvent(*event)
-				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[ERROR]: " + str(exc))
+					writer.writeNewException(exc)
 
 		controller.close()
 		writer.closeFile()
@@ -655,7 +683,12 @@ def main():
 	# An event listener, called whenever StreamEvent status changes
 	def probe_stream(event):
 		if event.status == 'DETACHED':
-			print("[ERROR]: Stream Detached...")
+			print("[ERROR]: Stream Detached from circuit {0}...".format(curr_cid))
+			print(event.__dict__)
+			f = open("stream_detached_log.txt", 'a')
+			f.write("[{0}] Stream Detached from circuit {1}...\n".format(datetime.datetime.now(), curr_cid) + str(event.__dict__) + "\n")
+			f.close()
+			sys.exit(1)
 		if event.status == 'NEW' and event.purpose == 'USER':
 			attach_stream(event)
 

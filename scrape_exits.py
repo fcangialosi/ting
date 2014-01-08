@@ -53,61 +53,63 @@ reachable_count = 0
 total = len(ips)
 try:
     for ip in ips:
-        print "\r",
-        print "\tQuerying... ({1}/{2})".format(ip,count,total),
-        sys.stdout.flush()
+        try:
+            print "\r",
+            print "\tQuerying... ({1}/{2})".format(ip,count,total),
+            sys.stdout.flush()
 
-        count += 1
+            count += 1
 
-        url = "http://torstatus.blutmagie.de/tor_exit_query.php"
-        values = {'QueryIP':ip,'DestinationIP':'128.8.126.92','DestinationPort':'8080'}
+            url = "http://torstatus.blutmagie.de/tor_exit_query.php"
+            values = {'QueryIP':ip,'DestinationIP':args['destination_ip'],'DestinationPort':args['destination_port']}
 
-        data = urllib.urlencode(values)
-        req = urllib2.Request(url,data)
-        response = urllib2.urlopen(req)
-        page = response.read()
-
-        soup = BeautifulSoup(page)
-
-        allowed = False
-        for font in soup.body.find_all('font', attrs={'color':'#00dd00'}):
-            if 'would allow exiting' in font.text:
-                allowed = True
-
-        if allowed:
-            reachable_count += 1
-            name = ""
-            fp = ""
-            for a in soup.body.find_all('a', attrs={'class':'plain'}):
-                if a['href'] and 'router_detail' in a['href']:
-                    name = a.text.encode('ascii', 'replace')
-                    fp = a['href'][21:]
-                    url = 'http://torstatus.blutmagie.de/' + a['href']
-
-            f.write("%s, %s, %s\n\t" % (fp, ip, name))
-
-            response = urllib2.urlopen(url)
+            data = urllib.urlencode(values)
+            req = urllib2.Request(url,data)
+            response = urllib2.urlopen(req)
             page = response.read()
+
             soup = BeautifulSoup(page)
 
-            keys = ['Hostname:', 'Country Code:', 'Platform / Version:', 'Current Uptime:', 'Bandwidth (Max/Burst/Observed - In Bps):', 'Family:']
-            props = {}
-            trs = soup.body.find_all('tr')
-            for tr in trs[2:]:
-                tds = tr.find_all('td')
-                if tds[0].text in keys:
-                    text = tds[1].text.encode('ascii','ignore')
-                    props[tds[0].text] = text
-            
-            props[keys[3]] = props[keys[3]].replace(',','')
-            f.write("%s, %s, %s, %s, %s, %s, " % (props[keys[0]],props[keys[1]],props[keys[2]],props[keys[3]],props[keys[4]],props[keys[5]]))
+            allowed = False
+            for font in soup.body.find_all('font', attrs={'color':'#00dd00'}):
+                if 'would allow exiting' in font.text:
+                    allowed = True
 
-            for tr in soup.body.find_all('tr', attrs={'class':'nr'}):
-                tds = tr.find_all('td')
-                if(tds[1].attrs['class'][0] == 'F1'):
-                    f.write("%s " % tds[0].text.encode('ascii','ignore').replace(':','').replace(' ','').upper())
-            f.write("\n")
-            
+            if allowed:
+                reachable_count += 1
+                name = ""
+                fp = ""
+                for a in soup.body.find_all('a', attrs={'class':'plain'}):
+                    if a['href'] and 'router_detail' in a['href']:
+                        name = a.text.encode('ascii', 'replace')
+                        fp = a['href'][21:]
+                        url = 'http://torstatus.blutmagie.de/' + a['href']
+
+                f.write("%s, %s, %s\n\t" % (fp, ip, name))
+
+                response = urllib2.urlopen(url)
+                page = response.read()
+                soup = BeautifulSoup(page)
+
+                keys = ['Hostname:', 'Country Code:', 'Platform / Version:', 'Current Uptime:', 'Bandwidth (Max/Burst/Observed - In Bps):', 'Family:']
+                props = {}
+                trs = soup.body.find_all('tr')
+                for tr in trs[2:]:
+                    tds = tr.find_all('td')
+                    if tds[0].text in keys:
+                        text = tds[1].text.encode('ascii','ignore')
+                        props[tds[0].text] = text
+                
+                props[keys[3]] = props[keys[3]].replace(',','')
+                f.write("%s, %s, %s, %s, %s, %s, " % (props[keys[0]],props[keys[1]],props[keys[2]],props[keys[3]],props[keys[4]],props[keys[5]]))
+
+                for tr in soup.body.find_all('tr', attrs={'class':'nr'}):
+                    tds = tr.find_all('td')
+                    if(tds[1].attrs['class'][0] == 'F1'):
+                        f.write("%s " % tds[0].text.encode('ascii','ignore').replace(':','').replace(' ','').upper())
+                f.write("\n")
+        except:
+            pass
 finally:
     f.close
 
