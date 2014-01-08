@@ -43,7 +43,7 @@ Ting has four primary modes (there is no default, you must specify one):
 
 A few important command line options worth noting:
 - `-o` optimizes Ting by keeping a cache of Ping results, to prevent re-pinging the exact same nodes. 
-- `-nt' specifies the number of times to Ting each node or circuit. This is essentially equivalent to ping's `-c` option
+- `-nt` specifies the number of times to Ting each node or circuit. This is essentially equivalent to ping's `-c` option
 
 Although there are other command line options available to specify ports, destination, etc, these are quite simple and can be found by running 
 
