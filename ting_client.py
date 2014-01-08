@@ -231,12 +231,13 @@ class TingUtils:
 		ip = self._exits[fp]
 		pings = []
 		attempts = 0
-		while((len(pings) < self._num_tings) and attempts < 5):
+		while((len(pings) < 10) and attempts < 5):
 			attempts += 1
 			regex = re.compile("(\d+.\d+) ms")
-			cmd = ['ping', '-c', str(self._num_tings), ip]
+			cmd = ['ping', '-i', '.2', '-c', '10', ip]
 			p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
-			for line in p.stdout.readlines():
+			lines = p.stdout.readlines()
+			for line in lines:
 				ping = regex.findall(line)
 				if ping != [] and "DUP" not in line:
 					pings.append(float(ping[0]))
@@ -418,13 +419,13 @@ class Worker:
 		now = datetime.datetime.now()
 		print("[{0}] Waiting for D to ping X..".format(now))
 
-		while(len(r_xd) != int(self._num_tings)):
+		while(len(r_xd) != 10):
 			if(count is 3):
 				self._utils.add_to_blacklist(self._utils._exits[relays[1]])
 				raise NotReachableException
 			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			s.connect((self._destination_ip, self._destination_port))
-			msg = "ping {0} {1}".format(self._utils._exits[relays[1]], self._num_tings)
+			msg = "ping {0} {1}".format(self._utils._exits[relays[1]], 10)
 			s.send(msg)
 			response = s.recv(1024)
 			s.close()
@@ -448,13 +449,13 @@ class Worker:
 		now = datetime.datetime.now()
 		print("[{0}] Pinging Y from S..".format(str(datetime.datetime.now())))
 
-		while(len(r_sy) != int(self._num_tings)):
+		while(len(r_sy) != 10):
 			if(count is 3):
 				self._utils.add_to_blacklist(self._utils._exits[relays[2]])
 				raise NotReachableException
 
 			r_sy = self._utils.ping(relays[2])
-
+			
 			if(len(r_sy) < 1):
 				self._utils.add_to_blacklist(self._utils._exits[relays[2]])
 				raise NotReachableException
