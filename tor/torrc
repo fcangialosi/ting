@@ -2,6 +2,7 @@ AvoidDiskWrites 1
 ControlPort 9051
 CookieAuthentication 1
 CircuitBuildTimeout 5
+LearnCircuitBuildTimeout 0
 DataDirectory /Users/fcangialosi/Applications/TorBrowser.app/Contents/Resources/Data/Tor
 DirPort 9030
 DirReqStatistics 0
@@ -9,5 +10,6 @@ DownloadExtraInfo 1
 FetchUselessDescriptors 1
 GeoIPFile ../../Contents/Resources/Data/Tor/geoip
 Log notice stdout
+Log notice file tor.log
 SocksListenAddress 127.0.0.1
 SocksPort 9050

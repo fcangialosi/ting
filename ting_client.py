@@ -522,9 +522,10 @@ class Worker:
 				builder.build_circuits(relays)
 
 				try:
+					writer.writeNewCircuit(relays, utils._exits)
 					events = self.find_r_xy(relays)
 					# Write data to file and increment counter only if tings were successful 
-					writer.writeNewCircuit(relays, utils._exits)
+					
 					for event in events:
 						writer.writeNewEvent(*event)
 					counter += 1
