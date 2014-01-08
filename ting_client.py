@@ -320,7 +320,7 @@ class CircuitBuilder:
 	# If no relays given, 4 are chosen at random
 	# Returns the list of relays used in building circuits
 	def build_circuits(self, relays = []):
-		print("[{0}] Choosing relays..".format(str(datetime.datetime.now())))
+		print("[{0}] Choosing relays and building circuits..".format(str(datetime.datetime.now())))
 		while True:
 			try:
 				if not relays: 
@@ -455,7 +455,7 @@ class Worker:
 				raise NotReachableException
 
 			r_sy = self._utils.ping(relays[2])
-			
+
 			if(len(r_sy) < 1):
 				self._utils.add_to_blacklist(self._utils._exits[relays[2]])
 				raise NotReachableException
@@ -496,6 +496,8 @@ class Worker:
 			print("[{0}] Calculated R_XY using mins".format(str(datetime.datetime.now())))
 			print ("RXY ~ " + str(r_xy))
 
+		return events
+
 	def start(self):
 
 		controller = self._controller
@@ -505,6 +507,8 @@ class Worker:
 
 		utils.get_valid_nodes()
 		writer.createFile()
+
+		controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
 		if(self._mode == 'verify'):
 			counter = 0
@@ -516,8 +520,6 @@ class Worker:
 					relays = utils.pick_relays()
 			
 				builder.build_circuits(relays)
-
-				controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
 				try:
 					events = self.find_r_xy(relays)
@@ -536,8 +538,6 @@ class Worker:
 				relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
 
 				builder.build_circuits(relays)
-
-				controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
 				try:
 					events = self.find_r_xy(relays)
@@ -558,8 +558,6 @@ class Worker:
 					relays = [wz[0],pair[0],pair[1],wz[1]]
 
 					builder.build_circuits(relays)
-
-					controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
 					events = self.find_r_xy(relays)
 
@@ -655,8 +653,8 @@ def main():
 
 	# An event listener, called whenever StreamEvent status changes
 	def probe_stream(event):
-		if(args['verbose']):
-			print("Probe stream: status={0} purpose={1}".format(event.status, event.purpose))
+		if event.status == 'DETACHED':
+			print("[ERROR]: Stream Detached...")
 		if event.status == 'NEW' and event.purpose == 'USER':
 			attach_stream(event)
 
