@@ -154,7 +154,7 @@ class TingUtils:
 		date_underscore = "{0}_{1}_{2}".format(now.month, now.day, now.year)
 		first_sub = current_dir + "/data/nodes/%s" % ip_underscore
 
-		filenum = 0
+		filenum = 1
 		if(os.path.exists(first_sub)):
 				second_sub = first_sub + "/" + date_underscore
 				if(os.path.exists(second_sub)):
@@ -170,7 +170,7 @@ class TingUtils:
 		self._valid_exits_fname = "{0}nodes/{1}/{2}/validexits_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 		self._blacklist_fname = "{0}nodes/{1}/{2}/blacklist_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 
-	def make_title(self, args):
+	def make_title(self, args, filename):
 		print("\n-----------------------------------")
 		print("	 _____ _		 \n	|_   _|_|___ ___ \n	  | | | |   | . |\n	  |_| |_|_|_|_  |\n		    |___|")
 		print("\n----------- Version 1.0 -----------")
@@ -193,6 +193,8 @@ class TingUtils:
 		elif(args['mode'] == 'rerun'):
 			print("Rerunning experiment conducted in: ", args['rerun'])
 		print("Data Directory:", args['data_dir'])
+		print("Reading Exit Nodes From: {0}".format(self._valid_exits_fname))
+		print("Output File: {0}".format(filename))
 		print("-----------------------------------")
 
 	def get_valid_nodes(self):
@@ -238,10 +240,9 @@ class TingUtils:
 		if(relay in self._exits):
 			del(self._exits[name])
 
-	# Given a fp, uses standard ping, and returns a 4-element array of the min, avg, max, stddev
+	# Given an ip, uses standard ping, and returns a 4-element array of the min, avg, max, stddev
 	# If any pings timeout, reruns up to five times. After five tries, returns an empty array signaling failure
-	def ping(self, fp):
-		ip = self._exits[fp]
+	def ping(self, ip):
 		pings = []
 		attempts = 0
 		while((len(pings) < 10) and attempts < 5):
@@ -387,13 +388,14 @@ class Worker:
 		self._optimize = args['optimize']
 		self._verbose = args['verbose']
 		self._pair = args['pair']
+		self._ping_cache = {}
 
 		self._utils = TingUtils(self._data_dir, self._destination_ip, self._destination_port, self._num_tings)
 		self._writer = OutputWriter(args)
 		self._builder = CircuitBuilder(controller, self._utils, self._writer)
 		
-
-		self._utils.make_title(args)
+		self._writer.createFile()
+		self._utils.make_title(args, self._writer._output_file)
 
 	# Tell socks to use tor as a proxy 
 	def setup_proxy(self):
@@ -435,58 +437,72 @@ class Worker:
 		r_sy = []
 		events = []
 
-		start = time.time()
-		now = datetime.datetime.now()
-		print("[{0}] Waiting for D to ping X..".format(now))
+		ip_x = self._utils._exits[relays[1]]
+		# Only use the cached value if it is less than an hour old
+		if ip_x in self._ping_cache and (time.time() - self._ping_cache[ip_x][0]) < 3600: 
+			age = time.time() - self._ping_cache[ip_x][0]
+			r_xd = self._ping_cache[ip_x][1]
+			print("[{0}] Loaded r_xd from cache ({1} seconds old)\nData: {2}".format(datetime.datetime.now(),age,str(r_xd)))
+		else: 
+			start = time.time()
+			now = datetime.datetime.now()
+			print("[{0}] Waiting for D to ping X..".format(now))
 
-		while(len(r_xd) != 10):
-			if(count is 3):
-				self._utils.add_to_blacklist(self._utils._exits[relays[1]])
-				raise NotReachableException
-			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			s.connect((self._destination_ip, self._destination_port))
-			msg = "ping {0} {1}".format(self._utils._exits[relays[1]], 10)
-			s.send(msg)
-			response = s.recv(1024)
-			s.close()
-			r_xd = self._utils.deserialize_ping_data(response)
-			if(len(r_xd) < 1):
-				self._utils.add_to_blacklist(self._utils._exits[relays[1]])
-				raise NotReachableException
-			count = count + 1
+			while(len(r_xd) != 10):
+				if(count is 3):
+					self._utils.add_to_blacklist(ip_x)
+					raise NotReachableException
+				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+				s.connect((self._destination_ip, self._destination_port))
+				msg = "ping {0} {1}".format(ip_x, 10)
+				s.send(msg)
+				response = s.recv(1024)
+				s.close()
+				r_xd = self._utils.deserialize_ping_data(response)
+				if(len(r_xd) < 1):
+					self._utils.add_to_blacklist(ip_x)
+					raise NotReachableException
+				count = count + 1
 
-		end = time.time()
-		elapsed = end - start
-		events.append((now, "ping", "X,D", str(r_xd), elapsed))
-		if(self._verbose):
-			print("RXD: " + str(r_xd))
-		print("[{0}] Successfully received ping data from D.".format(str(datetime.datetime.now())))
+			end = time.time()
+			elapsed = end - start
+			events.append((now, "ping", "X,D", str(r_xd), elapsed))
+			if(self._verbose):
+				print("RXD: " + str(r_xd))
+			print("[{0}] Successfully received ping data from D.".format(str(datetime.datetime.now())))
+			self._ping_cache[ip_x] = (start, r_xd)
 
+		ip_y = self._utils._exits[relays[2]]
+		# Only use the cached value if it is less than an hour old
+		if ip_y in self._ping_cache and (time.time() - self._ping_cache[ip_y][0]) < 3600: 
+			age = time.time() - self._ping_cache[ip_y][0]
+			r_sy = self._ping_cache[ip_y][1]
+			print("[{0}] Loaded r_sy from cache ({1} seconds old)\nData: {2}".format(datetime.datetime.now(),age,str(r_sy)))
+		else: 
+			count = 0
+			start = time.time()
+			now = datetime.datetime.now()
+			print("[{0}] Pinging Y from S..".format(str(datetime.datetime.now())))
 
-		count = 0
-		
-		start = time.time()
-		now = datetime.datetime.now()
-		print("[{0}] Pinging Y from S..".format(str(datetime.datetime.now())))
+			while(len(r_sy) != 10):
+				if(count is 3):
+					self._utils.add_to_blacklist(ip_y)
+					raise NotReachableException
 
-		while(len(r_sy) != 10):
-			if(count is 3):
-				self._utils.add_to_blacklist(self._utils._exits[relays[2]])
-				raise NotReachableException
+				r_sy = self._utils.ping(ip_y)
 
-			r_sy = self._utils.ping(relays[2])
+				if(len(r_sy) < 1):
+					self._utils.add_to_blacklist(ip_y)
+					raise NotReachableException
 
-			if(len(r_sy) < 1):
-				self._utils.add_to_blacklist(self._utils._exits[relays[2]])
-				raise NotReachableException
-
-			count = count + 1
-		end = time.time()
-		elapsed = end - start
-		events.append((now, "ping", "S,Y", str(r_sy), elapsed))
-		if(self._verbose):
-			print("RSY: " + str(r_sy))
-		print("[{0}] Ping successful.".format(str(datetime.datetime.now())))
+				count = count + 1
+			end = time.time()
+			elapsed = end - start
+			events.append((now, "ping", "S,Y", str(r_sy), elapsed))
+			if(self._verbose):
+				print("RSY: " + str(r_sy))
+			print("[{0}] Ping successful.".format(str(datetime.datetime.now())))
+			self._ping_cache[ip_y] = (start, r_sy)
 
 		circuits = [full, sub_one, sub_two]
 		paths = ["S,W,X,Y,Z,D", "S,W,X,D", "S,Y,Z,D"]
@@ -526,7 +542,6 @@ class Worker:
 		writer = self._writer
 
 		utils.get_valid_nodes()
-		writer.createFile()
 
 		controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
