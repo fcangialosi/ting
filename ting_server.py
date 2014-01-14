@@ -2,6 +2,7 @@ import SocketServer
 import re
 import subprocess
 import sys
+import datetime
 
 class MyTCPHandler(SocketServer.BaseRequestHandler):
     """
@@ -19,7 +20,7 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
 
     def ping(self, ip):
         pings = []
-        cmd = ['ping', '-c',str(self.num_pings),ip]
+        cmd = ['ping', '-i', '.2', '-c',str(self.num_pings),ip]
         p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
         for line in p.stdout.readlines():
             ping = self.ping_data_regex.findall(line)
@@ -37,7 +38,7 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
             self.num_pings = int(self.ping_num_regex.findall(self.data)[0])
             ip = self.ping_ip_regex.findall(self.data)[0]
 
-            print "Pinging", ip, "(X)", self.num_pings, "times..."
+            print "[{0}]".format(str(datetime.datetime.now())), "Pinging", ip, "(X)", self.num_pings, "times..."
             result = self.ping(ip)
             print "Data:", result
 
@@ -46,7 +47,7 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
         elif('echo' in self.data):
             self.num_pings = int(self.echo_num_regex.findall(self.data)[0])
 
-            print "Getting ready to echo"
+            print "[{0}] Getting ready to echo".format(str(datetime.datetime.now()))
             self.request.sendall("OKAY")
 
             for i in range(1, self.num_pings+1):
@@ -59,7 +60,7 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
 
 if __name__ == "__main__":
     TCP_IP = '128.8.126.92'
-    TCP_PORT = 6667
+    TCP_PORT = 8080
     print("TCP server listening on port " + str(TCP_PORT))
     # Create the server, binding to localhost on port TCP_PORT
     server = SocketServer.TCPServer((TCP_IP, TCP_PORT), MyTCPHandler)

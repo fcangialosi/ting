@@ -341,8 +341,7 @@ class CircuitBuilder:
 				if not relays: 
 					relays = self._utils.pick_relays()
 				if len(relays) == 2:
-					wz = ['af1625276a4d5579fd198cee586feada2c364129','fabc1426470c333704c8ec1f4412fbe1bd4e8474']
-					#wz = self._utils.pick_relays(n=2, existing=relays)
+					wz = self._utils.pick_relays(n=2, existing=relays)
 					relays = [wz[0], relays[0], relays[1], wz[1]]
 
 				global full
@@ -393,6 +392,10 @@ class Worker:
 		self._verbose = args['verbose']
 		self._pair = args['pair']
 		self._ping_cache = {}
+
+		self._circuit = []
+		for node in args['circuit']:
+			self._circuit.append(node.lower())
 
 		self._utils = TingUtils(self._data_dir, self._destination_ip, self._destination_port, self._num_tings)
 		self._writer = OutputWriter(args)
@@ -555,7 +558,7 @@ class Worker:
 			if(self._pair[0] == "Not specified"):
 				xy = utils.pick_relays(n=2, existing=[])
 			else:
-				xy = [self._pair[0], self._pair[1]]
+				xy = [self._pair[0].lower(), self._pair[1].lower()]
 
 			counter = 0
 			while(counter < self._num_pairs):
@@ -579,8 +582,7 @@ class Worker:
 		elif(self._mode == 'check'):
 			success = False
 			while(not success):
-				wz = utils.pick_relays(n=2, existing=self._pair)
-				relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
+				relays = self._circuit
 
 				writer.writeNewIteration()
 				builder.build_circuits(relays)
@@ -627,6 +629,7 @@ def main():
 	parser.add_argument('mode', help="Specify running mode.", choices=['verify', 'check', 'pairs', 'rerun'], default='pairs')
 	parser.add_argument('-np', '--num-pairs', help="Number of pairs to test. Defaults to 100.", default=100)
 	parser.add_argument('-p', '--pair', help="Specify a specific pair of X and Y for check one or verification", nargs=2)
+	parser.add_argument('-c', '--circuit', help="Specify an entire circuit to check", nargs=4)
 	parser.add_argument('-r', '--rerun', help="Specify the data file of an experiment to be rerun")
 	parser.add_argument('-dp', '--destination-port', help="Specify destination port.",default=6667)
 	parser.add_argument('-di', '--destination-ip', help="Specify destination ip address.", default='128.8.126.92')
@@ -639,8 +642,8 @@ def main():
 	parser.add_argument('-v', '--verbose', help="Print all results and stream statuses along the way.", action='store_true')
 	args = vars(parser.parse_args())
 
-	if(args['mode'] == 'check' and args['pair'] is None):
-		print("[ERROR]: Check requires the -p (--pair) parameter. \nUSAGE: -p RELAY_X RELAY_Y")
+	if(args['mode'] == 'check' and args['circuit'] is None):
+		print("[ERROR]: Check requires the -c (--circuit) parameter. \nUSAGE: -c RELAY_W RELAY_X RELAY_Y RELAY_Z")
 		sys.exit(1)
 	if(args['mode'] == 'verify' and args['pair'] is None):
 		print("[WARN]: X and Y were not specified, choosing them at random. It is recommended that you specify known reliable X and Y relays.\n")
