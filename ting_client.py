@@ -33,7 +33,15 @@ sub_two = 0
 Thrown when destination is not reachable via a public ip address
 """
 class NotReachableException(Exception):
-	pass
+    """Exception raised when connections are timing out
+
+    Attributes:
+        msg -- details about the connection being made
+        dest  -- destination to which connection failed (only relevant for Ping)
+    """
+	def __init__(self, msg, dest, exit):
+		self.msg = msg
+		self.dest = dest
 
 """
 Writes Ting output files
@@ -59,6 +67,11 @@ class OutputWriter:
 		self._current_ting = 1
 
 	def createFile(self):
+		"""
+		Create file for output writing, and any 
+		directories needed that do not already exist
+		"""
+
 		current_dir = os.path.dirname(os.path.realpath(__file__))
 		first_sub = current_dir + "/" + self._ting_dir
 		filenum = 0
@@ -73,11 +86,16 @@ class OutputWriter:
 			if not filenums == []:
 				filenum = max(filenums)
 		self._output_file = self._ting_dir + "/ting_{0}_{1}.txt".format(self._mode,filenum+1)
-		self._f = open(self._output_file, 'a')
 
 		self.writeFileHeader()
 
 	def writeFileHeader(self):
+		"""
+		Write the header at the beginning of the file 
+		that describes the relevant details of the experiment
+		"""
+
+		self._f = open(self._output_file, 'a')
 		self._f.write("### Ting " + version + " Log ###\n")
 		self._f.write("--------------------------------\n")
 		self._f.write("# SOCKS5Port %s\n" % self._socks_port)
@@ -95,37 +113,63 @@ class OutputWriter:
 		self._f.write("# DataDirectory %s\n" % self._data_dir)
 		self._f.write("# DateTime %s\n" % str(datetime.datetime.now()))
 		self._f.write("--------------------------------\n")
+		self._f.close()
 
 	def writeNewIteration(self):
+		"""
+		Write a line for clear delineation between 
+		circuit changes (iterations)
+		"""
+
+		self._f = open(self._output_file, 'a')
 		self._f.write("\n## %s ##\n" % str(self._current_ting))
 		print("------- {0} -------".format(self._current_ting))
 		self._current_ting += 1
+		self._f.close()
 
 	# Circuit should be in the form [[fingerprint, ip],[..],...]
 	def writeNewCircuit(self, circuit, exits):
+		"""
+		Write details of the circuit for a specific iteration
+		"""
+		
+		self._f = open(self._output_file, 'a')
 		self._f.write("--Circuit:\n")
 		self._f.write("W %s %s\n" % (circuit[0], exits[circuit[0]]))
 		self._f.write("X %s %s\n" % (circuit[1], exits[circuit[1]]))
 		self._f.write("Y %s %s\n" % (circuit[2], exits[circuit[2]]))
 		self._f.write("Z %s %s\n" % (circuit[3], exits[circuit[3]]))
 		self._f.write("--Events:\n")
+		self._f.close()
 		
 	def writeNewEvent(self, time, pt, relays, data, elapsed):
+		"""
+		Write details of a ting or ping measurement
+
+		time -- Time began
+		pt -- "Ping" or "Ting"
+		relays -- Letter representation of the relays used
+		data -- Measurements recorded
+		elapsed -- Time elapsed during the entire ting or ping
+		"""
+
+		self._f = open(self._output_file, 'a')
 		event = "{0} [{1} {2}] {3}s\n\t{4}\n".format(time, pt, relays, elapsed, data)
 		self._f.write(event)
+		self._f.close()
 
 	def writeCircuitBuildError(self, which, relays):
+		self._f = open(self._output_file, 'a')
 		event = "[{0}] Failed to build circuit {1}\n\tRelays: {2}\n".format(str(datetime.datetime.now()), which, relays)
 		print(event)
 		self._f.write(event)
-
-	def writeNewException(self, exc):
-		event = "[{0}] {1} thrown. \n\tDetails: {2}".format(str(datetime.datetime.now()), exc.__class__.__name__, exc.__dict__)
-		self._f.write(event)
-
-	def closeFile(self):
 		self._f.close()
 
+	def writeNewException(self, exc):
+		self._f = open(self._output_file, 'a')
+		event = "[{0}] {1} thrown. \n\tDetails: {2}".format(str(datetime.datetime.now()), exc.__class__.__name__, exc.__dict__)
+		self._f.write(event)
+		self._f.close()
 
 """ 
 Contains all auxillary methods
@@ -312,30 +356,16 @@ class CircuitBuilder:
 		self._utils = utils
 		self._writer = writer
 
-	# Check list of circuits to see if one with the same relays already exists
-	def circuit_exists(self, relays):
-		for circ in self._controller.get_circuits():
-			found = True
-			if len(circ.path) == len(relays):
-				for i in range(len(circ.path)-1):
-					found = circ.path[i][1] == relays[i]
-					if i == len(relays)-1:
-						break
-				if found:
-					return circ.id
-		return -1
-
-	# If circuit already exists, just return find and return id of it
-	def create_circuit(self, relays):
-		cid = self.circuit_exists(relays)
-		if cid is -1:
-			cid = self._controller.new_circuit(relays, await_build = True)
-		return cid
-
 	# Builds all necessary circuits for the list of 4 given relays
 	# If no relays given, 4 are chosen at random
 	# Returns the list of relays used in building circuits
 	def build_circuits(self, relays = []):
+		"""
+		Builds all 3 necessary circuits
+		If X,Y are given, tries different pairs of W,Z until all 3 circuits can be created
+		Returns the list of relays used in the final circuit building
+		"""
+
 		print("[{0}] Choosing relays and building circuits..".format(str(datetime.datetime.now())))
 		while True:
 			try:
@@ -353,11 +383,11 @@ class CircuitBuilder:
 				sub_two = None
 
 				failed_creating = "W,X,Y,Z"
-				full = self.create_circuit(relays)
+				full = self._controller.new_circuit(relays, await_build = True)
 				failed_creating = "W,X"
-				sub_one = self.create_circuit(relays[:2])
+				sub_one = self._controller.new_circuit(relays[:2], await_build = True)
 				failed_creating = "Y,Z"
-				sub_two = self.create_circuit(relays[-2:])
+				sub_two = self._controller.new_circuit(relays[-2:], await_build = True)
 				print("[{0}] All circuits built successfully.".format(str(datetime.datetime.now())))
 				return relays
 
@@ -434,13 +464,14 @@ class Worker:
 
 					arr[i-1] = (end_time-start_time)*1000
 			else:
-				raise NotReachableException
+				raise NotReachableException("Did not recieve a response over Tor circuit", None)
 			self._sock.close()
 			print('[{0}] Finished {1} tings to {2}'.format(str(datetime.datetime.now()), self._num_tings,self._destination_ip))
 			return arr
 		except TypeError as exc:
 			print("Failed to connect using the given circuit.", exc)
 
+	# Run 2 pings and 3 tings, return details of all measurements
 	def find_r_xy(self, relays):
 		global curr_cid
 		count = 0
@@ -462,7 +493,7 @@ class Worker:
 			while(len(r_xd) != 10):
 				if(count is 3):
 					self._utils.add_to_blacklist(ip_x)
-					raise NotReachableException
+					raise NotReachableException("Not able to get enough consistent ping measurements", ip_x)
 				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				s.connect((self._destination_ip, self._destination_port))
 				msg = "ping {0} {1}".format(ip_x, 10)
@@ -472,7 +503,7 @@ class Worker:
 				r_xd = self._utils.deserialize_ping_data(response)
 				if(len(r_xd) < 1):
 					self._utils.add_to_blacklist(ip_x)
-					raise NotReachableException
+					raise NotReachableException("Ping requests timed out. Probably not a public IP address", ip_x)
 				count = count + 1
 
 			end = time.time()
@@ -498,13 +529,13 @@ class Worker:
 			while(len(r_sy) != 10):
 				if(count is 3):
 					self._utils.add_to_blacklist(ip_y)
-					raise NotReachableException
+					raise NotReachableException("Not able to get enough consistent ping measurements", ip_y)
 
 				r_sy = self._utils.ping(ip_y)
 
 				if(len(r_sy) < 1):
 					self._utils.add_to_blacklist(ip_y)
-					raise NotReachableException
+					raise NotReachableException("Ping requests timed out. Probably not a public IP address", ip_y)
 
 				count = count + 1
 			end = time.time()
@@ -545,6 +576,7 @@ class Worker:
 
 		return events
 
+	# Main execution loop
 	def start(self):
 
 		controller = self._controller
