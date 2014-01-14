@@ -121,7 +121,6 @@ class OutputWriter:
 
 	def writeNewException(self, exc):
 		event = "[{0}] {1} thrown. \n\tDetails: {2}".format(str(datetime.datetime.now()), exc.__class__.__name__, exc.__dict__)
-		print(event)
 		self._f.write(event)
 
 	def closeFile(self):
@@ -186,8 +185,10 @@ class TingUtils:
 			print("\tY:", args['pair'][1])
 			print(args['num_pairs'], "random pairs of W and Z")
 		elif(args['mode'] == 'check'):
-			print("\tX:", args['pair'][0])
-			print("\tY:", args['pair'][1])
+			print("\tW:", args['circuit'][0])
+			print("\tX:", args['circuit'][1])
+			print("\tY:", args['circuit'][2])
+			print("\tZ:", args['circuit'][3])
 		elif(args['mode'] == 'random'):
 			print("Measuring all {0} combinations of {1} random pairs".format((args['num_pairs']*(args['num_pairs']-1)/2),args['num_pairs']))
 		elif(args['mode'] == 'rerun'):
@@ -409,6 +410,7 @@ class Worker:
 	    socks.setdefaultproxy(self._socks_type, self._socks_host, self._socks_port)
 	    socket.socket = socks.socksocket
 	    sock = socks.socksocket()
+	    sock.settimeout(20) # Streams usually detach within 20 seconds
 	    return sock
 
 	# Run a ping through a Tor circuit, return array of times measured
@@ -576,7 +578,7 @@ class Worker:
 						writer.writeNewEvent(*event)
 					counter += 1
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
-					print("[ERROR]: " + str(exc))
+					print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 					writer.writeNewException(exc)
 
 		elif(self._mode == 'check'):
@@ -598,6 +600,9 @@ class Worker:
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[ERROR]: " + str(exc))
 					writer.writeNewException(exc)
+				except socket.timeout as timeout:
+					print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
+					writer.writeNewException(timeout)
 
 		elif(self._mode == 'pairs'):
 			pairs = utils.get_random_pairs(self._num_pairs)
@@ -618,7 +623,7 @@ class Worker:
 					for event in events:
 						writer.writeNewEvent(*event)
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
-					print("[ERROR]: " + str(exc))
+					print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 					writer.writeNewException(exc)
 
 		controller.close()
@@ -709,11 +714,9 @@ def main():
 	def probe_stream(event):
 		if event.status == 'DETACHED':
 			print("[ERROR]: Stream Detached from circuit {0}...".format(curr_cid))
-			print(event.__dict__)
 			f = open("stream_detached_log.txt", 'a')
 			f.write("[{0}] Stream Detached from circuit {1}...\n".format(datetime.datetime.now(), curr_cid) + str(event.__dict__) + "\n")
 			f.close()
-			sys.exit(1)
 		if event.status == 'NEW' and event.purpose == 'USER':
 			attach_stream(event)
 
