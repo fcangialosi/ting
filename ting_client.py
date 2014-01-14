@@ -33,12 +33,12 @@ sub_two = 0
 Thrown when destination is not reachable via a public ip address
 """
 class NotReachableException(Exception):
-    """Exception raised when connections are timing out
+	"""Exception raised when connections are timing out
 
     Attributes:
-        msg -- details about the connection being made
-        dest  -- destination to which connection failed (only relevant for Ping)
-    """
+		msg -- details about the connection being made
+		dest  -- destination to which connection failed (only relevant for Ping)
+	"""
 	def __init__(self, msg, dest, exit):
 		self.msg = msg
 		self.dest = dest
@@ -85,7 +85,7 @@ class OutputWriter:
 				filenums.append(int(regex.findall(f)[0]))
 			if not filenums == []:
 				filenum = max(filenums)
-		self._output_file = self._ting_dir + "/ting_{0}_{1}.txt".format(self._mode,filenum+1)
+		self._output_file = self._ting_dir + "ting_{0}_{1}.txt".format(self._mode,filenum+1)
 
 		self.writeFileHeader()
 
@@ -425,8 +425,9 @@ class Worker:
 		self._ping_cache = {}
 
 		self._circuit = []
-		for node in args['circuit']:
-			self._circuit.append(node.lower())
+		if args['circuit']:
+			for node in args['circuit']:
+				self._circuit.append(node.lower())
 
 		self._utils = TingUtils(self._data_dir, self._destination_ip, self._destination_port, self._num_tings)
 		self._writer = OutputWriter(args)
@@ -612,6 +613,9 @@ class Worker:
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 					writer.writeNewException(exc)
+				except socket.timeout as timeout:
+					print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
+					writer.writeNewException(timeout)
 
 		elif(self._mode == 'check'):
 			success = False
@@ -657,9 +661,11 @@ class Worker:
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 					writer.writeNewException(exc)
+				except socket.timeout as timeout:
+					print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
+					writer.writeNewException(timeout)
 
 		controller.close()
-		writer.closeFile()
 
 def main():
 	parser = argparse.ArgumentParser(prog='Ting', description='Ting is like ping, but instead measures round-trip times between two indivudal nodes in the Tor network.')
