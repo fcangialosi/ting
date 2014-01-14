@@ -1,7 +1,7 @@
 AvoidDiskWrites 1
 ControlPort 9051
 CookieAuthentication 1
-CircuitBuildTimeout 5
+CircuitBuildTimeout 10
 LearnCircuitBuildTimeout 0
 DataDirectory /Users/fcangialosi/Applications/TorBrowser.app/Contents/Resources/Data/Tor
 DirPort 9030

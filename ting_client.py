@@ -72,7 +72,7 @@ class OutputWriter:
 				filenums.append(int(regex.findall(f)[0]))
 			if not filenums == []:
 				filenum = max(filenums)
-		self._output_file = self._ting_dir + "/ting_{0}_{1}.txt".format(self._mode,filenum+1)
+		self._output_file = self._ting_dir + "ting_{0}_{1}.txt".format(self._mode,filenum+1)
 		self._f = open(self._output_file, 'a')
 
 		self.writeFileHeader()
@@ -120,9 +120,9 @@ class OutputWriter:
 		self._f.write(event)
 
 	def writeNewException(self, exc):
-		event = "[{0}] {1} thrown. \n\tDetails: {2}".format(str(datetime.datetime.now()), exc.__clas__.__name__, exc.__dict__)
+		event = "[{0}] {1} thrown. \n\tDetails: {2}".format(str(datetime.datetime.now()), exc.__class__.__name__, exc.__dict__)
 		print(event)
-		self._f.write()
+		self._f.write(event)
 
 	def closeFile(self):
 		self._f.close()
@@ -205,7 +205,7 @@ class TingUtils:
 		except IOError as exc:
 			print("Could not find list of valid exit nodes.")
 			print("Downloading now... (This may take a few minutes)")
-			cmd = ['python', 'scrape_exits.py', '-di', self._destination_ip, '-dp', str(self._destination_port)]
+			cmd = ['python', 'get_nodes_fast.py', '-di', self._destination_ip, '-dp', str(self._destination_port)]
 			p = subprocess.Popen(cmd, shell=False)
 			p.communicate()
 			p.wait()
@@ -215,7 +215,7 @@ class TingUtils:
 		for line in f.readlines():
 			if(not line[0] in escapes):
 				relay = line.strip().replace(" ", "").split(",")
-				exits[relay[0]] = relay[1]
+				exits[relay[0].lower()] = relay[1]
 		f.close()
 
 		# Remove any blacklisted nodes from exit list
@@ -288,7 +288,7 @@ class TingUtils:
 			temp = choice(self._exits.keys())
 			while(temp in relays or temp in existing):
 				temp = choice(self._exits.keys())
-			relays[i] = temp
+			relays[i] = temp.lower()
 		return relays
 
 	def get_random_pairs(self, num_pairs):
@@ -310,6 +310,7 @@ class CircuitBuilder:
 		self._controller = controller
 		self._utils = utils
 		self._writer = writer
+		self.first = True
 
 	# Check list of circuits to see if one with the same relays already exists
 	def circuit_exists(self, relays):
@@ -326,9 +327,7 @@ class CircuitBuilder:
 
 	# If circuit already exists, just return find and return id of it
 	def create_circuit(self, relays):
-		cid = self.circuit_exists(relays)
-		if cid is -1:
-			cid = self._controller.new_circuit(relays, await_build = True)
+		cid = self._controller.new_circuit(relays, await_build = True)
 		return cid
 
 	# Builds all necessary circuits for the list of 4 given relays
@@ -340,6 +339,9 @@ class CircuitBuilder:
 			try:
 				if not relays: 
 					relays = self._utils.pick_relays()
+				if len(relays) == 2:
+					wz = self._utils.pick_relays(n=2, existing=relays)
+					relays = [wz[0], relays[0], relays[1], wz[1]]
 
 				global full
 				global sub_one
@@ -365,7 +367,7 @@ class CircuitBuilder:
 				if sub_two is not None:
 					self._controller.close_circuit(sub_two)
 				self._writer.writeCircuitBuildError(failed_creating, relays)
-				relays = [] 
+				relays = relays[1:3] 
 
 """
 Controller class that does all of the work
@@ -380,7 +382,7 @@ class Worker:
 		self._socks_type = socks.PROXY_TYPE_SOCKS5
 		self._buffer_size = args['buffer_size']
 		self._destination_ip = args['destination_ip']
-		self._destination_port = args['destination_port']
+		self._destination_port = int(args['destination_port'])
 		self._num_tings = args['num_tings']
 		self._num_pairs = int(args['num_pairs'])
 		self._mode = args['mode']
@@ -439,10 +441,12 @@ class Worker:
 
 		ip_x = self._utils._exits[relays[1]]
 		# Only use the cached value if it is less than an hour old
-		if ip_x in self._ping_cache and (time.time() - self._ping_cache[ip_x][0]) < 3600: 
+		if ip_x in self._ping_cache and (time.time() - self._ping_cache[ip_x][0]) < 600: 
+			now = datetime.datetime.now()
 			age = time.time() - self._ping_cache[ip_x][0]
 			r_xd = self._ping_cache[ip_x][1]
-			print("[{0}] Loaded r_xd from cache ({1} seconds old)\nData: {2}".format(datetime.datetime.now(),age,str(r_xd)))
+			print("[{0}] Loaded r_xd from cache ({1} seconds old)\nData: {2}".format(now,age,str(r_xd)))
+			events.append((now, "ping", "X,D", str(r_xd), 0))
 		else: 
 			start = time.time()
 			now = datetime.datetime.now()
@@ -474,10 +478,12 @@ class Worker:
 
 		ip_y = self._utils._exits[relays[2]]
 		# Only use the cached value if it is less than an hour old
-		if ip_y in self._ping_cache and (time.time() - self._ping_cache[ip_y][0]) < 3600: 
+		if ip_y in self._ping_cache and (time.time() - self._ping_cache[ip_y][0]) < 600: 
+			now = datetime.datetime.now()
 			age = time.time() - self._ping_cache[ip_y][0]
 			r_sy = self._ping_cache[ip_y][1]
-			print("[{0}] Loaded r_sy from cache ({1} seconds old)\nData: {2}".format(datetime.datetime.now(),age,str(r_sy)))
+			print("[{0}] Loaded r_sy from cache ({1} seconds old)\nData: {2}".format(now,age,str(r_sy)))
+			events.append((now, "ping", "S,Y", str(r_sy), 0))
 		else: 
 			count = 0
 			start = time.time()
@@ -546,39 +552,41 @@ class Worker:
 		controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
 		if(self._mode == 'verify'):
+			if(self._pair[0] == "Not specified"):
+				xy = utils.pick_relays(n=2, existing=[])
+			else:
+				xy = [self._pair[0].lower(), self._pair[1].lower()]
+
 			counter = 0
 			while(counter < self._num_pairs):
-				if(not self._pair[0] == "Not specified"):
-					wz = utils.pick_relays(n=2, existing=self._pair)
-					relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
-				else:
-					relays = utils.pick_relays()
 
 				writer.writeNewIteration()
-				builder.build_circuits(relays)
+				relays = builder.build_circuits(xy)
 				writer.writeNewCircuit(relays, utils._exits)
 
+				print("[RELAYS]: " + str(relays))
 				try:	
 					events = self.find_r_xy(relays)
-					# Write data to file and increment counter only if tings were successful 
 					
+					# Write data to file and increment counter only if tings were successful 
 					for event in events:
 						writer.writeNewEvent(*event)
 					counter += 1
-				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
 					print("[ERROR]: " + str(exc))
 					writer.writeNewException(exc)
+				except socks.Socks5Error as err:
+					writer.writeNewException(err)
+
 
 		elif(self._mode == 'check'):
 			success = False
 			while(not success):
-				wz = utils.pick_relays(n=2, existing=self._pair)
-				relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
+				xy = [self._pair[0].lower(), self._pair[1].lower()]
 
 				writer.writeNewIteration()
-				builder.build_circuits(relays)
+				relays = builder.build_circuits(xy)
 				writer.writeNewCircuit(relays, utils._exits)
-
 				try:
 					events = self.find_r_xy(relays)
 					# Write data to file and increment counter only if tings were successful 
@@ -586,20 +594,21 @@ class Worker:
 					for event in events:
 						writer.writeNewEvent(*event)
 					success = True
-				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
 					print("[ERROR]: " + str(exc))
 					writer.writeNewException(exc)
+				except socks.Socks5Error as err:
+					writer.writeNewException(err)
 
 		elif(self._mode == 'pairs'):
 			pairs = utils.get_random_pairs(self._num_pairs)
 
 			for pair in pairs:
 				try:
-					wz = utils.pick_relays(n=2, existing=pair)
-					relays = [wz[0],pair[0],pair[1],wz[1]]
+					xy = [self._pair[0], self._pair[1]]
 
 					writer.writeNewIteration()
-					builder.build_circuits(relays)
+					relays = builder.build_circuits(xy)
 					writer.writeNewCircuit(relays, utils._exits)
 
 					events = self.find_r_xy(relays)
@@ -608,9 +617,11 @@ class Worker:
 					
 					for event in events:
 						writer.writeNewEvent(*event)
-				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments) as exc:
 					print("[ERROR]: " + str(exc))
 					writer.writeNewException(exc)
+				except socks.Socks5Error as err:
+					writer.writeNewException(err)
 
 		controller.close()
 		writer.closeFile()
@@ -697,13 +708,12 @@ def main():
 
 	# An event listener, called whenever StreamEvent status changes
 	def probe_stream(event):
+		#print ("[{0}] DEBUG (STREAM EVENT): {1}".format(datetime.datetime.now(),str(event.__dict__)))
 		if event.status == 'DETACHED':
-			print("[ERROR]: Stream Detached from circuit {0}...".format(curr_cid))
-			print(event.__dict__)
+			print("[{0}] [ERROR]: Stream {1} Detached from circuit {2}...".format(str(datetime.datetime.now()),event.id,curr_cid))
 			f = open("stream_detached_log.txt", 'a')
-			f.write("[{0}] Stream Detached from circuit {1}...\n".format(datetime.datetime.now(), curr_cid) + str(event.__dict__) + "\n")
+			f.write("[{0}] Stream {1} Detached from circuit {2}...\n".format(datetime.datetime.now(), event.id, curr_cid) + str(event.__dict__) + "\n")
 			f.close()
-			sys.exit(1)
 		if event.status == 'NEW' and event.purpose == 'USER':
 			attach_stream(event)
 
