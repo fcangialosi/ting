@@ -120,9 +120,9 @@ class OutputWriter:
 		self._f.write(event)
 
 	def writeNewException(self, exc):
-		event = "[{0}] {1} thrown. \n\tDetails: {2}".format(str(datetime.datetime.now()), exc.__clas__.__name__, exc.__dict__)
+		event = "[{0}] {1} thrown. \n\tDetails: {2}".format(str(datetime.datetime.now()), exc.__class__.__name__, exc.__dict__)
 		print(event)
-		self._f.write()
+		self._f.write(event)
 
 	def closeFile(self):
 		self._f.close()
@@ -204,8 +204,8 @@ class TingUtils:
 			f = open(self._valid_exits_fname)
 		except IOError as exc:
 			print("Could not find list of valid exit nodes.")
-			print("Downloading now... (This may take a few minutes)")
-			cmd = ['python', 'scrape_exits.py', '-di', self._destination_ip, '-dp', str(self._destination_port)]
+			print("Downloading now... (This may take a few seconds)")
+			cmd = ['python', 'get_nodes_fast.py', '-di', self._destination_ip, '-dp', str(self._destination_port)]
 			p = subprocess.Popen(cmd, shell=False)
 			p.communicate()
 			p.wait()
@@ -215,7 +215,7 @@ class TingUtils:
 		for line in f.readlines():
 			if(not line[0] in escapes):
 				relay = line.strip().replace(" ", "").split(",")
-				exits[relay[0]] = relay[1]
+				exits[relay[0].lower()] = relay[1]
 		f.close()
 
 		# Remove any blacklisted nodes from exit list
@@ -340,6 +340,10 @@ class CircuitBuilder:
 			try:
 				if not relays: 
 					relays = self._utils.pick_relays()
+				if len(relays) == 2:
+					wz = ['af1625276a4d5579fd198cee586feada2c364129','fabc1426470c333704c8ec1f4412fbe1bd4e8474']
+					#wz = self._utils.pick_relays(n=2, existing=relays)
+					relays = [wz[0], relays[0], relays[1], wz[1]]
 
 				global full
 				global sub_one
@@ -365,7 +369,7 @@ class CircuitBuilder:
 				if sub_two is not None:
 					self._controller.close_circuit(sub_two)
 				self._writer.writeCircuitBuildError(failed_creating, relays)
-				relays = [] 
+				relays = relays[1:3]
 
 """
 Controller class that does all of the work
@@ -380,7 +384,7 @@ class Worker:
 		self._socks_type = socks.PROXY_TYPE_SOCKS5
 		self._buffer_size = args['buffer_size']
 		self._destination_ip = args['destination_ip']
-		self._destination_port = args['destination_port']
+		self._destination_port = int(args['destination_port'])
 		self._num_tings = args['num_tings']
 		self._num_pairs = int(args['num_pairs'])
 		self._mode = args['mode']
@@ -415,7 +419,7 @@ class Worker:
 			if data == "OKAY":
 				for i in range(1, int(self._num_tings)+1):
 					msg = str(time.time())
-					print('{0} bytes to {1}: ping_num={2}'.format(self._buffer_size,self._destination_ip,i), end='\r')
+					print('{0} bytes to {1}: ting_num={2}'.format(self._buffer_size,self._destination_ip,i), end='\r')
 					sys.stdout.flush()
 
 					start_time = time.time()
@@ -424,8 +428,10 @@ class Worker:
 					end_time = time.time()
 
 					arr[i-1] = (end_time-start_time)*1000
+			else:
+				raise NotReachableException
 			self._sock.close()
-			print('[{0}] Finished {1} pings to {2}'.format(str(datetime.datetime.now()), self._num_tings,self._destination_ip))
+			print('[{0}] Finished {1} tings to {2}'.format(str(datetime.datetime.now()), self._num_tings,self._destination_ip))
 			return arr
 		except TypeError as exc:
 			print("Failed to connect using the given circuit.", exc)
@@ -546,16 +552,17 @@ class Worker:
 		controller.add_event_listener(self._probe_stream, EventType.STREAM)
 
 		if(self._mode == 'verify'):
+			if(self._pair[0] == "Not specified"):
+				xy = utils.pick_relays(n=2, existing=[])
+			else:
+				xy = [self._pair[0].lower(), self._pair[1].lower()]
+
 			counter = 0
 			while(counter < self._num_pairs):
-				if(not self._pair[0] == "Not specified"):
-					wz = utils.pick_relays(n=2, existing=self._pair)
-					relays = [wz[0],self._pair[0],self._pair[1],wz[1]]
-				else:
-					relays = utils.pick_relays()
 
 				writer.writeNewIteration()
-				builder.build_circuits(relays)
+				relays = builder.build_circuits(xy)
+				print(relays)
 				writer.writeNewCircuit(relays, utils._exits)
 
 				try:	
