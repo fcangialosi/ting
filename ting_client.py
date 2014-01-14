@@ -215,7 +215,7 @@ class TingUtils:
 		for line in f.readlines():
 			if(not line[0] in escapes):
 				relay = line.strip().replace(" ", "").split(",")
-				exits[relay[0].lower()] = relay[1]
+				exits[relay[0]] = relay[1]
 		f.close()
 
 		# Remove any blacklisted nodes from exit list
@@ -555,7 +555,7 @@ class Worker:
 			if(self._pair[0] == "Not specified"):
 				xy = utils.pick_relays(n=2, existing=[])
 			else:
-				xy = [self._pair[0].lower(), self._pair[1].lower()]
+				xy = [self._pair[0], self._pair[1]]
 
 			counter = 0
 			while(counter < self._num_pairs):
