@@ -570,10 +570,9 @@ class Worker:
 			if(self._verbose):
 				print("Data: {0}\n".format(str(tings[cid])))
 
-		if(self._verbose):
-			r_xy = min(tings[full]) - min(tings[sub_one]) - min(tings[sub_two]) + min(r_xd) + min(r_sy)
-			print("[{0}] Calculated R_XY using mins".format(str(datetime.datetime.now())))
-			print ("RXY ~ " + str(r_xy))
+		r_xy = min(tings[full]) - min(tings[sub_one]) - min(tings[sub_two]) + min(r_xd) + min(r_sy)
+		print("[{0}] Calculated R_XY using mins".format(str(datetime.datetime.now())))
+		print ("RXY ~ " + str(r_xy))
 
 		return events
 
