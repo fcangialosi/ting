@@ -11,10 +11,10 @@ def deserialize_ping_data(data):
             pings.append(float(x))
     return pings
 
-percentile = 5
+x = 5
 def percentile(arr):
         arr.sort()
-        return arr[percentile-1]
+        return arr[x-1]
 
 # Example: data/tings/1_11_2014/ting_verify_4.txt
 with open(sys.argv[1]) as f:
@@ -47,5 +47,5 @@ plt.plot(sorted_min, np.arange(len(sorted_min)*1.0)/len(sorted_min))
 plt.plot(sorted_percentile, np.arange(len(sorted_percentile)*1.0)/len(sorted_percentile))
 plt.xlabel("Time (ms)")
 plt.ylabel("CDF")
-plt.legend(['Min','{0} percentile'.format(percentile)], loc='best')
+plt.legend(['Min','{0} percentile'.format(x)], loc='best')
 plt.savefig(sys.argv[1][:-4]+".png")
