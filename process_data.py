@@ -43,6 +43,8 @@ while index < len(data):
 
 sorted_min = np.sort(rxys_min)
 sorted_percentile = np.sort(rxys_percentile)
+print(sorted_min)
+print(sorted_percentile)
 plt.plot(sorted_min, np.arange(len(sorted_min)*1.0)/len(sorted_min))
 plt.plot(sorted_percentile, np.arange(len(sorted_percentile)*1.0)/len(sorted_percentile))
 plt.xlabel("Time (ms)")
