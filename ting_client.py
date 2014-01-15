@@ -154,7 +154,10 @@ class OutputWriter:
 		"""
 
 		self._f = open(self._output_file, 'a')
-		event = "{0} [{1} {2}] {3}s\n\t{4}\n".format(time, pt, relays, elapsed, data)
+		if(elapsed == 0):
+			event = "{0} [{1} {2}] (cached)\n\t{3}\n".format(time, pt, relays, data)
+		else:
+			event = "{0} [{1} {2}] {3}s\n\t{4}\n".format(time, pt, relays, elapsed, data)
 		self._f.write(event)
 		self._f.close()
 
@@ -486,6 +489,7 @@ class Worker:
 			age = time.time() - self._ping_cache[ip_x][0]
 			r_xd = self._ping_cache[ip_x][1]
 			print("[{0}] Loaded r_xd from cache ({1} seconds old)\nData: {2}".format(datetime.datetime.now(),age,str(r_xd)))
+			events.append((datetime.datetime.now(), "ping", "X,D", str(r_xd), 0))
 		else: 
 			start = time.time()
 			now = datetime.datetime.now()
@@ -521,6 +525,7 @@ class Worker:
 			age = time.time() - self._ping_cache[ip_y][0]
 			r_sy = self._ping_cache[ip_y][1]
 			print("[{0}] Loaded r_sy from cache ({1} seconds old)\nData: {2}".format(datetime.datetime.now(),age,str(r_sy)))
+			events.append((datetime.datetime.now(), "ping", "S,Y", str(r_sy), 0))
 		else: 
 			count = 0
 			start = time.time()
