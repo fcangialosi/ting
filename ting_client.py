@@ -449,16 +449,17 @@ class Worker:
 
 	# Run a ping through a Tor circuit, return array of times measured
 	def ting(self, path):
-		arr = [0 for x in range(int(self._num_tings))]
+		num_tings = int(self._num_tings)+1
+		if(path == "S,W,X,Y,Z,D"):
+			num_tings *= 2 # Do twice as many tings for the full circuit
+		arr = [0 for x in range(num_tings)]
 		try:
 			self._sock.connect((self._destination_ip,self._destination_port))
 			msg = "echo " + str(self._num_tings)
 			self._sock.send(msg)
 			data = self._sock.recv(self._buffer_size)
 			if data == "OKAY":
-				num_tings = int(self._num_tings)+1
-				if(path == "S,W,X,Y,Z,D"):
-					num_tings *= 2 # Do twice as many tings for the full circuit
+				
 				for i in range(1, num_tings):
 					msg = str(time.time())
 					print('{0} bytes to {1}: ting_num={2}'.format(self._buffer_size,self._destination_ip,i), end='\r')
