@@ -115,15 +115,14 @@ class OutputWriter:
 		self._f.write("--------------------------------\n")
 		self._f.close()
 
-	def writeNewIteration(self):
+	def writeNewIteration(self, msg=""):
 		"""
 		Write a line for clear delineation between 
 		circuit changes (iterations)
 		"""
-
 		self._f = open(self._output_file, 'a')
-		self._f.write("\n## %s ##\n" % str(self._current_ting))
-		print("------- {0} -------".format(self._current_ting))
+		self._f.write("\n## %s%s ##\n" % str(self._current_ting,msg))
+		print("------- {0}{1} -------".format(self._current_ting,msg))
 		self._current_ting += 1
 		self._f.close()
 
@@ -602,13 +601,32 @@ class Worker:
 				xy = utils.pick_relays(n=2, existing=[])
 			else:
 				xy = [self._pair[0].lower(), self._pair[1].lower()]
+				yx = [self._pair[1].lower(), self._pair[0].lower()]
 
 			counter = 0
 			while(counter < self._num_pairs):
 
-				writer.writeNewIteration()
+				writer.writeNewIteration(msg="(XY)")
 				relays = builder.build_circuits(xy)
-				print(relays)
+				writer.writeNewCircuit(relays, utils._exits)
+
+				try:	
+					events = self.find_r_xy(relays)
+					# Write data to file and increment counter only if tings were successful 
+					
+					for event in events:
+						writer.writeNewEvent(*event)
+					counter += 1
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
+					print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
+					writer.writeNewException(exc)
+				except socket.timeout as timeout:
+					print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
+					writer.writeNewException(timeout)
+
+				writer._current_ting -= 1
+				writer.writeNewIteration(msg = "(YX)")
+				relays = builder.build_circuits(yx)
 				writer.writeNewCircuit(relays, utils._exits)
 
 				try:	
