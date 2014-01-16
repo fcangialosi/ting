@@ -121,7 +121,7 @@ class OutputWriter:
 		circuit changes (iterations)
 		"""
 		self._f = open(self._output_file, 'a')
-		self._f.write("\n## %s%s ##\n" % str(self._current_ting,msg))
+		self._f.write("\n## %s%s ##\n" % (str(self._current_ting),msg))
 		print("------- {0}{1} -------".format(self._current_ting,msg))
 		self._current_ting += 1
 		self._f.close()
@@ -339,15 +339,32 @@ class TingUtils:
 		return relays
 
 	def get_random_pairs(self, num_pairs):
-		fps = self._exits.keys()[:num_pairs]
+		fps = self._exits.keys()
+		shuffle(fps)
+		pool = fps[:num_pairs]
 		pairs = []
 		for i in range(num_pairs):
 			j = i+1
 			while(j < num_pairs):
-				pairs.append([fps[i], fps[j]])
+				pairs.append([pool[i], pool[j]])
 				j += 1
 		shuffle(pairs)	
 		return pairs
+
+	def pick_four(self):
+		fps = self._exits.keys()
+		shuffle(fps)
+		w = choice(fps)
+		x = choice(fps)
+		while (x == w):
+			x = choice(fps)
+		y = choice(fps)
+		while (y == w or y == x):
+			y = choice(fps)
+		z = choice(fps)
+		while (z == w or z == y or z == x):
+			z = choice(fps)
+		return [w,x,y,z]
 
 """
 Creates and Modifies Circuits
@@ -401,7 +418,10 @@ class CircuitBuilder:
 				if sub_two is not None:
 					self._controller.close_circuit(sub_two)
 				self._writer.writeCircuitBuildError(failed_creating, relays)
-				relays = relays[1:3]
+				if len(relays) == 2:
+					relays = relays[1:3]
+				else:
+					relays = self._utils.pick_four()
 
 """
 Controller class that does all of the work
@@ -667,15 +687,12 @@ class Worker:
 					writer.writeNewException(timeout)
 
 		elif(self._mode == 'pairs'):
-			pairs = utils.get_random_pairs(self._num_pairs)
-
-			for pair in pairs:
+			counter = 0
+			while(counter < self._num_pairs)
 				try:
-					wz = utils.pick_relays(n=2, existing=pair)
-					relays = [wz[0],pair[0],pair[1],wz[1]]
-
+					first_try = utils.pick_four()
 					writer.writeNewIteration()
-					builder.build_circuits(relays)
+					relays = builder.build_circuits(first_try)
 					writer.writeNewCircuit(relays, utils._exits)
 
 					events = self.find_r_xy(relays)
@@ -684,6 +701,7 @@ class Worker:
 					
 					for event in events:
 						writer.writeNewEvent(*event)
+					counter = counter + 1
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 					writer.writeNewException(exc)
