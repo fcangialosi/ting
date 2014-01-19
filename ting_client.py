@@ -39,7 +39,7 @@ class NotReachableException(Exception):
 		msg -- details about the connection being made
 		dest  -- destination to which connection failed (only relevant for Ping)
 	"""
-	def __init__(self, msg, dest, exit):
+	def __init__(self, msg, dest):
 		self.msg = msg
 		self.dest = dest
 
@@ -121,7 +121,7 @@ class OutputWriter:
 		circuit changes (iterations)
 		"""
 		self._f = open(self._output_file, 'a')
-		self._f.write("\n## %s%s ##\n" % str(self._current_ting,msg))
+		self._f.write("\n## %s%s ##\n" % (str(self._current_ting),msg))
 		print("------- {0}{1} -------".format(self._current_ting,msg))
 		self._current_ting += 1
 		self._f.close()
@@ -616,7 +616,6 @@ class Worker:
 					
 					for event in events:
 						writer.writeNewEvent(*event)
-					counter += 1
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 					writer.writeNewException(exc)
@@ -635,14 +634,14 @@ class Worker:
 					
 					for event in events:
 						writer.writeNewEvent(*event)
-					counter += 1
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 					writer.writeNewException(exc)
 				except socket.timeout as timeout:
 					print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
 					writer.writeNewException(timeout)
-
+				
+				counter += 1
 		elif(self._mode == 'check'):
 			success = False
 			while(not success):
