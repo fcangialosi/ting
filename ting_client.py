@@ -650,7 +650,10 @@ class Worker:
 				while(counter < self._num_pairs):
 
 					writer.writeNewIteration()
-					relays = builder.build_circuits(circuit)
+					if(circuit[0] == "*" and circuit[3] == "*"):
+						relays = builder.build_circuits(circuit[1:3])
+					else:
+						relays = builder.build_circuits(circuit)
 					writer.writeNewCircuit(relays, utils._exits)
 
 					try:
