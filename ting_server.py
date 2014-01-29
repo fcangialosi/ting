@@ -20,7 +20,7 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
 
     def ping(self, ip):
         pings = []
-        cmd = ['ping', '-i', '.2', '-c',str(self.num_pings),ip]
+        cmd = ['ping', '-c',str(self.num_pings),ip]
         p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
         for line in p.stdout.readlines():
             ping = self.ping_data_regex.findall(line)
@@ -60,7 +60,7 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
 
 if __name__ == "__main__":
     TCP_IP = '128.8.126.92'
-    TCP_PORT = 8080
+    TCP_PORT = int(sys.argv[1])
     print("TCP server listening on port " + str(TCP_PORT))
     # Create the server, binding to localhost on port TCP_PORT
     server = SocketServer.TCPServer((TCP_IP, TCP_PORT), MyTCPHandler)
