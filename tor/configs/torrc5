@@ -1,15 +1,14 @@
 AvoidDiskWrites 1
-ControlPort 9051
+ControlPort 9451
 CookieAuthentication 1
 CircuitBuildTimeout 10
 LearnCircuitBuildTimeout 0
-DataDirectory ~/tordata
-DirPort 9030
+DataDirectory ~/.tor/5/
+DirPort 9430
 DirReqStatistics 0
 DownloadExtraInfo 1
 FetchUselessDescriptors 1
-GeoIPFile ../../Contents/Resources/Data/Tor/geoip
 Log notice stdout
-Log notice file tor.log
+Log notice file tor5.log
 SocksListenAddress 127.0.0.1
-SocksPort 9050
+SocksPort 9450

@@ -257,7 +257,7 @@ class TingUtils:
 			p.communicate()
 			p.wait()
 			f = open(self._valid_exits_fname)
-
+		
 		escapes = ["#", "\t", "\n"]
 		for line in f.readlines():
 			if(not line[0] in escapes):
@@ -295,7 +295,7 @@ class TingUtils:
 		while((len(pings) < 10) and attempts < 5):
 			attempts += 1
 			regex = re.compile("(\d+.\d+) ms")
-			cmd = ['ping', '-i', '.2', '-c', '10', ip]
+			cmd = ['ping','-c', '10', ip]
 			p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
 			lines = p.stdout.readlines()
 			for line in lines:
@@ -498,7 +498,7 @@ class Worker:
 			now = datetime.datetime.now()
 			print("[{0}] Waiting for D to ping X..".format(now))
 
-			while(len(r_xd) != 10):
+			while(len(r_xd) <= 4):
 				if(count is 3):
 					self._utils.add_to_blacklist(ip_x)
 					raise NotReachableException("Not able to get enough consistent ping measurements", ip_x)
@@ -535,7 +535,7 @@ class Worker:
 			now = datetime.datetime.now()
 			print("[{0}] Pinging Y from S..".format(str(datetime.datetime.now())))
 
-			while(len(r_sy) != 10):
+			while(len(r_sy) <= 4):
 				if(count is 3):
 					self._utils.add_to_blacklist(ip_y)
 					raise NotReachableException("Not able to get enough consistent ping measurements", ip_y)
@@ -657,7 +657,6 @@ class Worker:
 					
 					for event in events:
 						writer.writeNewEvent(*event)
-					success = True
 				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 					print("[ERROR]: " + str(exc))
 					writer.writeNewException(exc)
@@ -709,6 +708,10 @@ def main():
 	parser.add_argument('-o', '--optimize', help="Cache ping results from S and D to decrease running time", action='store_true')
 	parser.add_argument('-v', '--verbose', help="Print all results and stream statuses along the way.", action='store_true')
 	args = vars(parser.parse_args())
+        
+        # Just in case defaults are not used, ports must be ints!
+        args['controller_port'] = int(args['controller_port'])
+        args['socks_port'] = int(args['socks_port'])
 
 	if(args['mode'] == 'check' and args['circuit'] is None):
 		print("[ERROR]: Check requires the -c (--circuit) parameter. \nUSAGE: -c RELAY_W RELAY_X RELAY_Y RELAY_Z")

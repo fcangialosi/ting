@@ -1,0 +1,14 @@
+AvoidDiskWrites 1
+ControlPort 9351
+CookieAuthentication 1
+CircuitBuildTimeout 10
+LearnCircuitBuildTimeout 0
+DataDirectory ~/.tor/4/
+DirPort 9330
+DirReqStatistics 0
+DownloadExtraInfo 1
+FetchUselessDescriptors 1
+Log notice stdout
+Log notice file tor4.log
+SocksListenAddress 127.0.0.1
+SocksPort 9350

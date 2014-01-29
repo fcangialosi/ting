@@ -1,0 +1,14 @@
+AvoidDiskWrites 1
+ControlPort 9251
+CookieAuthentication 1
+CircuitBuildTimeout 10
+LearnCircuitBuildTimeout 0
+DataDirectory ~/.tor/3/
+DirPort 9230
+DirReqStatistics 0
+DownloadExtraInfo 1
+FetchUselessDescriptors 1
+Log notice stdout
+Log notice file tor3.log
+SocksListenAddress 127.0.0.1
+SocksPort 9250

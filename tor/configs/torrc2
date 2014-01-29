@@ -1,0 +1,14 @@
+AvoidDiskWrites 1
+ControlPort 9151
+CookieAuthentication 1
+CircuitBuildTimeout 10
+LearnCircuitBuildTimeout 0
+DataDirectory ~/.tor/2/
+DirPort 9130
+DirReqStatistics 0
+DownloadExtraInfo 1
+FetchUselessDescriptors 1
+Log notice stdout
+Log notice file tor2.log
+SocksListenAddress 127.0.0.1
+SocksPort 9150
