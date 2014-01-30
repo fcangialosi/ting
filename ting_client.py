@@ -646,13 +646,15 @@ class Worker:
 				circuits.append(list(regex.findall(l)[0]))
 
 			for circuit in circuits:
-				counter = 0
-				while(counter < self._num_pairs):
+				counter_wz = 0
+				counter_zw = 0
+				while(counter_wz < self._num_pairs and counter_zw < self._num_pairs):
 
-					writer.writeNewIteration()
 					if(circuit[0] == "*" and circuit[3] == "*"):
+						writer.writeNewIteration(msg = "(WZ)")
 						relays = builder.build_circuits(circuit[1:3])
 					else:
+						writer.writeNewIteration()
 						relays = builder.build_circuits(circuit)
 					writer.writeNewCircuit(relays, utils._exits)
 
@@ -660,7 +662,7 @@ class Worker:
 						events = self.find_r_xy(relays)
 						for event in events:
 							writer.writeNewEvent(*event)
-						counter+=1
+						counter_wz += 1
 					except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 						print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 						writer.writeNewException(exc)
@@ -668,6 +670,24 @@ class Worker:
 						print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
 						writer.writeNewException(timeout)
 						
+					writer._current_ting -= 1
+					writer.writeNewIteration(msg = "(ZW)")
+					if(circuit[0] == "*" and circuit[3] == "*"):
+						zw = [relays[3],relays[1], relays[2], relays[0]]
+					writer.writeNewCircuit(zw, utils._exits)
+
+					try:
+						events = self.find_r_xy(zw)
+						for event in events:
+							writer.writeNewEvent(*event)
+						counter_zw += 1
+					except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
+						print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
+						writer.writeNewException(exc)
+					except socket.timeout as timeout:
+						print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
+						writer.writeNewException(timeout)
+
 		controller.close()
 
 def main():
