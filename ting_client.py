@@ -134,10 +134,24 @@ class OutputWriter:
 		
 		self._f = open(self._output_file, 'a')
 		self._f.write("--Circuit:\n")
-		self._f.write("W %s %s\n" % (circuit[0], exits[circuit[0]]))
-		self._f.write("X %s %s\n" % (circuit[1], exits[circuit[1]]))
-		self._f.write("Y %s %s\n" % (circuit[2], exits[circuit[2]]))
-		self._f.write("Z %s %s\n" % (circuit[3], exits[circuit[3]]))
+
+		if(circuit[0] in exits):
+			self._f.write("W %s %s\n" % (circuit[0], exits[circuit[0]]))
+		else:
+			self._f.write("W %s [COULDNT FIND IP]\n" % (circuit[0])
+		if(circuit[1] in exits):
+			self._f.write("X %s %s\n" % (circuit[1], exits[circuit[1]]))
+		else:
+			self._f.write("X %s [COULDNT FIND IP]\n" % (circuit[1])
+		if(circuit[2] in exits):
+			self._f.write("Y %s %s\n" % (circuit[2], exits[circuit[2]]))
+		else:
+			self._f.write("Y %s [COULDNT FIND IP]\n" % (circuit[2])
+		if(circuit[3] in exits):
+			self._f.write("Z %s %s\n" % (circuit[3], exits[circuit[3]]))
+		else:
+			self._f.write("Z %s [COULDNT FIND IP]\n" % (circuit[3])
+				
 		self._f.write("--Events:\n")
 		self._f.close()
 		
