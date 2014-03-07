@@ -45,17 +45,16 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
             self.request.sendall(str(result))
 
         elif('echo' in self.data):
-            self.num_pings = int(self.echo_num_regex.findall(self.data)[0])
-
             print "[{0}] Getting ready to echo".format(str(datetime.datetime.now()))
             self.request.sendall("OKAY")
-
-            for i in range(1, self.num_pings+1):
+            i = 1
+            while(not ('done' in self.data)):
                 self.data = self.request.recv(64).strip()
+                self.request.sendall("echo")
                 print("\r"),
                 print("Recieved ting " + str(i) + " from " + self.client_address[0]),
                 sys.stdout.flush()
-                self.request.sendall("echo")
+                i += 1
             print("\n")
 
 if __name__ == "__main__":

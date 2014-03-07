@@ -380,6 +380,7 @@ class CircuitBuilder:
 				return relays
 
 			except(InvalidRequest, CircuitExtensionFailed) as exc:
+				print(exc)
 				if full is not None:
 					self._controller.close_circuit(full)
 				if sub_one is not None:
@@ -433,22 +434,44 @@ class Worker:
 	    sock.settimeout(20) # Streams usually detach within 20 seconds
 	    return sock
 
+	def remove_outliers(self, measurements):
+		sorted_arr = numpy.sort(measurements)
+		left = sorted_arr[0:len(sorted_arr)/2]
+		if((len(sorted_arr) % 2) == 0):
+			right = sorted_arr[len(sorted_arr)/2:]
+		else:
+			right = sorted_arr[len(sorted_arr)/2+1:]
+		q1 = int(numpy.median(left))
+		q3 = int(numpy.median(right))
+		iqr = q3 - q1
+		lower = q1 - (1.5*iqr)
+		upper = q3 + (1.5*iqr)
+		good_ones = []
+		for r_xy in measurements:
+			if(lower < r_xy < upper):
+				good_ones.append(r_xy)
+		closeness = float(len(good_ones)) / len(measurements)
+		return (closeness, good_ones)
+
+	def consistent(self, samples):
+		last_ten = samples[-10:]
+
 	# Run a ping through a Tor circuit, return array of times measured
 	def ting(self, path):
-		num_tings = int(self._num_tings)
-		if(path == "S,W,X,Y,Z,D"):
-			num_tings *= 2 # Do twice as many tings for the full circuit
-		arr = [0 for x in range(num_tings)]
+		num_tings = 1
+		arr = []
+		min_so_far = 10000000
+		min_in_a_row = 0
+		stable = False
 		try:
 			self._sock.connect((self._destination_ip,self._destination_port))
 			msg = "echo " + str(num_tings)
 			self._sock.send(msg)
 			data = self._sock.recv(self._buffer_size)
 			if data == "OKAY":
-				
-				for i in range(1, num_tings+1):
-					msg = str(time.time())
-					print('{0} bytes to {1}: ting_num={2}'.format(self._buffer_size,self._destination_ip,i), end='\r')
+				while(not stable):
+					msg = str("ting")
+					print('{0} bytes to {1}: ting_num={2}'.format(self._buffer_size,self._destination_ip,num_tings), end='\r')
 					sys.stdout.flush()
 
 					start_time = time.time()
@@ -456,7 +479,19 @@ class Worker:
 					data = self._sock.recv(self._buffer_size)
 					end_time = time.time()
 
-					arr[i-1] = (end_time-start_time)*1000
+					sample = (end_time-start_time)*1000
+					arr.append(sample)
+					num_tings += 1
+					if(sample < min_so_far): 
+						min_so_far = sample
+						min_in_a_row = 0
+					else:
+						min_in_a_row += 1
+
+					if(min_in_a_row >= 10):
+						stable = True
+						self._sock.send("done")
+						data = self._sock.recv(self._buffer_size)
 			else:
 				raise NotReachableException("Did not recieve a response over Tor circuit", None)
 			self._sock.close()
@@ -569,7 +604,7 @@ class Worker:
 		print("[{0}] Calculated R_XY using mins".format(str(datetime.datetime.now())))
 		print ("RXY ~ " + str(r_xy))
 
-		return events
+		return (events, r_xy)
 
 	# Main execution loop
 	def start(self):
@@ -598,7 +633,7 @@ class Worker:
 				writer.writeNewCircuit(relays, utils._exits)
 
 				try:	
-					events = self.find_r_xy(relays)
+					events = self.find_r_xy(relays)[0]
 					# Write data to file and increment counter only if tings were successful 
 					
 					for event in events:
@@ -616,7 +651,7 @@ class Worker:
 				writer.writeNewCircuit(relays, utils._exits)
 
 				try:	
-					events = self.find_r_xy(relays)
+					events = self.find_r_xy(relays)[0]
 					# Write data to file and increment counter only if tings were successful 
 					
 					for event in events:
@@ -639,7 +674,7 @@ class Worker:
 				writer.writeNewCircuit(relays, utils._exits)
 
 				try:
-					events = self.find_r_xy(relays)
+					events = self.find_r_xy(relays)[0]
 					# Write data to file and increment counter only if tings were successful 
 					
 					for event in events:
@@ -660,50 +695,37 @@ class Worker:
 				circuits.append(list(regex.findall(l)[0]))
 
 			for circuit in circuits:
-				counter_wz = 0
-				counter_zw = 0
-				checking_wz = True
-				while(counter_wz < self._num_pairs and (counter_zw < self._num_pairs or not checking_wz)):
+				# Keep trying more WZ until stable
+				stable = False
+				measurements = []
+				iterations = 0
+				while(not stable):
 
-					if(circuit[0] == "*" and circuit[3] == "*"):
-						writer.writeNewIteration(msg = "(WZ)")
-						relays = builder.build_circuits(circuit[1:3])
-					else:
-						writer.writeNewIteration()
-						relays = builder.build_circuits(circuit)
+					writer.writeNewIteration(msg = "({0} for this XY)".format(iterations+1))
+					relays = builder.build_circuits(circuit[1:3])
 					writer.writeNewCircuit(relays, utils._exits)
 
 					try:
-						events = self.find_r_xy(relays)
+						events, r_xy = self.find_r_xy(relays)
 						for event in events:
 							writer.writeNewEvent(*event)
-						counter_wz += 1
+						if(r_xy > 0):
+							measurements.append(r_xy)
 					except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
 						print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
 						writer.writeNewException(exc)
 					except socket.timeout as timeout:
 						print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
 						writer.writeNewException(timeout)
-						
-					if(circuit[0] == "*" and circuit[3] == "*"):
-						writer._current_ting -= 1
-						writer.writeNewIteration(msg = "(ZW)")
-						zw = [relays[3],relays[1], relays[2], relays[0]]
-						writer.writeNewCircuit(zw, utils._exits)
 
-						try:
-							events = self.find_r_xy(zw)
-							for event in events:
-								writer.writeNewEvent(*event)
-							counter_zw += 1
-						except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error) as exc:
-							print("[{0}] [ERROR]: ".format(datetime.datetime.now()) + str(exc))
-							writer.writeNewException(exc)
-						except socket.timeout as timeout:
-							print("[{0}] [ERROR]: Socket connection timed out. Trying next circuit...".format(datetime.datetime.now()))
-							writer.writeNewException(timeout)
-					else:
-						checking_wz = False
+					if(len(measurements) >= 10):
+						closeness, no_outliers = self.remove_outliers(measurements)
+						if((closeness > .75) and (numpy.std(no_outliers) < 10)):
+							stable = True
+							print("===== MEASUREMENTS FOR THIS XY" + str(measurements))
+							print("===== GUESS FOR THIS XY? {0}(Median) {1}(Mean) {2}(STD)".format(str(numpy.median(measurements)),str(numpy.mean(measurements)),str(numpy.std(measurements))))
+							print("===== GUESS FOR THIS XY WITHOUT OUTLIERS? {0}(Median) {1}(Mean) {2}(STD)".format(str(numpy.median(no_outliers)),str(numpy.mean(no_outliers)),str(numpy.std(no_outliers))))
+					iterations += 1
 
 		controller.close()
 
