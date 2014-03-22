@@ -98,8 +98,9 @@ def setup_data_dirs(self):
 	self._valid_exits_fname = "{0}nodes/{1}/{2}/validexits_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 	self._blacklist_fname = "{0}nodes/{1}/{2}/blacklist_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
 
-def get_valid_nodes(destination_port, output_file):
+def get_valid_nodes(destination_port):
 	exit_nodes = {}
+	output_file = "data/nodes/{0}/{1}/validexits_{2}_{3}.txt".format(str(destination_ip.replace(".", "_")), "3_22_2014", str(destination_port), str(1))
 
 	cmd = ['python', 'get_nodes_fast.py', '-di', destination_ip, '-dp', str(destination_port)]
 	p = subprocess.Popen(cmd, shell=False)
@@ -183,14 +184,14 @@ class Worker:
 		self._destination_port = destination_port
 		self._job_stack = job_stack
 		self._result_queue = result_queue
-		print("[{0}] Worker created with cp {1}, dp {2}, sp {3}").format(datetime.datetime.now(),controller_port,destination_port,socks_port)
+		print("[{0}] Worker created with cp {1}, dp {2}, sp {3}".format(datetime.datetime.now(),controller_port,destination_port,socks_port))
 		self._ping_cache = {}
 		self._exits = get_valid_nodes(destination_port)
-		self._controller = initialize_controller()
-		print("[{0}] Controller successfully initialized on port {1}").format(datetime.datetime.now(), controller_port) 
+		self._controller = self.initialize_controller()
+		print("[{0}] Controller successfully initialized on port {1}".format(datetime.datetime.now(), controller_port))
 
-	def initialize_controller():
-		controller = Controller.from_port(port = args['controller_port'])
+	def initialize_controller(self):
+		controller = Controller.from_port(port = self._controller_port)
 		if not controller:
 			sys.stderr.write("ERROR: Couldn't connect to Tor.\n")
 			sys.exit
@@ -507,7 +508,7 @@ def main():
 		job_stack.put_nowait(list(regex.findall(l)[0]))
 
 	results_queue = Queue()
-	
+
 	controller_port = 9051
 	socks_port = 9050
 	destination_port = 6667
