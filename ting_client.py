@@ -183,11 +183,11 @@ class Worker:
 		self._destination_port = destination_port
 		self._job_stack = job_stack
 		self._result_queue = result_queue
-		print "[{0}] Worker created with cp {1}, dp {2}, sp {3}".format(datetime.datetime.now(),controller_port,destination_port,socks_port)
+		print("[{0}] Worker created with cp {1}, dp {2}, sp {3}").format(datetime.datetime.now(),controller_port,destination_port,socks_port)
 		self._ping_cache = {}
 		self._exits = get_valid_nodes(destination_port)
 		self._controller = initialize_controller()
-		print "[{0}] Controller successfully initialized on port {1}".format(datetime.datetime.now(), controller_port) 
+		print("[{0}] Controller successfully initialized on port {1}").format(datetime.datetime.now(), controller_port) 
 
 	def initialize_controller():
 		controller = Controller.from_port(port = args['controller_port'])
@@ -289,7 +289,7 @@ class Worker:
 		return relays
 
 	# Run a ping through a Tor circuit, return array of times measured
-	def ting(self):
+	def ting(self,path):
 		arr = []
 		current_min = 10000000
 		consecutive_min = 0
@@ -322,11 +322,12 @@ class Worker:
 						self._sock.send("done")
 						data = self._sock.recv(buffer_size)
 			else:
-				#*** raise NotReachableException("Did not recieve a response over Tor circuit", "ting")
+				raise NotReachableException("Did not recieve a response over Tor circuit", "t_"+path,'')
 			self._sock.close()
 			return arr
 		except TypeError as exc:
-			#*** print("Failed to connect using the given circuit.", exc)
+			print("Failed to connect using the given circuit: ", exc)
+			raise NotReachableException("Failed to connect using the given circuit: ", "t_"+path,'')
 
 	# Run 2 pings and 3 tings, return details of all measurements
 	def find_r_xy(self, relays):
@@ -418,13 +419,14 @@ class Worker:
 		# Ting the 3 tor circuits
 		for cid in circuits:
 			self._curr_cid = cid
+			path = paths[index]
 
 			self._sock = self.setup_proxy()
 			start = time.time()
-			tings[paths[index]] = self.ting()
+			tings[path] = self.ting(path)
 			self._sock = self._sock.close()
 			end = time.time()
-			events[paths[index]] = {
+			events[path] = {
 				'time_elapsed' : (end-start),
 				'measurements' : arr
 			}
@@ -477,7 +479,7 @@ class Worker:
 			except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error, socket.timeout) as exc:
 				result['events']['error'] = {
 					'time_occurred' : datetime.datetime.now(),
-					'type' : exc.__class__.__name__
+					'type' : exc.__class__.__name__,
 					'details' : vars(exc)
 				}
 
@@ -494,7 +496,7 @@ def main():
 
 	begin = datetime.datetime.now()
 
-    job_stack = LifoQueue()
+	job_stack = LifoQueue()
 
 	# Read and parse input file
 	f = open(args['input_file'])
@@ -504,11 +506,11 @@ def main():
 	for l in reversed(r):
 		job_stack.put_nowait(list(regex.findall(l)[0]))
 
-    results_queue = Queue()
-        
-    controller_port = 9051
-    socks_port = 9050
-    destination_port = 6667
+	results_queue = Queue()
+	
+	controller_port = 9051
+	socks_port = 9050
+	destination_port = 6667
 
 	w = Worker(controller_port, socks_port, destination_port, job_stack, results_queue)
 	w.start()
