@@ -20,6 +20,7 @@ import os.path
 from os.path import join, dirname, isfile
 sys.path.append(join(dirname(__file__), 'libs'))
 from SocksiPy import socks 
+import json
 
 ting_version = "1.0"
 destination_ip = '128.8.126.92'
@@ -248,7 +249,7 @@ class Worker:
 		while True:
 			try:
 				if len(relays) == 2:
-					wz = self._utils.pick_relays(n=2, existing=relays)
+					wz = self.pick_relays(n=2, existing=relays)
 					relays = [wz[0], relays[0], relays[1], wz[1]]
 					pick_wz = True
 
@@ -266,21 +267,22 @@ class Worker:
 				return relays
 
 			except(InvalidRequest, CircuitExtensionFailed) as exc:
-				print(exc)
+				print(vars(exc))
+				print("FAILED CREATING: " + failed_creating)
 				if self._full_id is not None:
 					self._controller.close_circuit(self._full_id)
 				if self._sub_one_id is not None:
 					self._controller.close_circuit(self._sub_one_id)
 				if self._sub_two_id is not None:
 					self._controller.close_circuit(self._sub_two_id)
-				self._writer.writeCircuitBuildError(failed_creating, relays)
+				#** PERHAPS WRITE SOMETHING HERE ABOUT BUILD ERROR 
 				if(pick_wz):
 					relays = relays[1:3]
 
 	# N - number of relays to pick
 	# Existing - list of relays already in the circuit being built
 	# Exits - dictionary of valid exit nodes
-	def pick_relays(n = 4, existing = []):
+	def pick_relays(self, n = 4, existing = []):
 		relays = [0 for x in range(n)]
 		for i in range(len(relays)):
 			temp = choice(self._exits.keys())
@@ -339,11 +341,11 @@ class Worker:
 
 		start = time.time()
 
-		ip_x = self._utils._exits[relays[1]]
-		age = time.time() - self._ping_cache[ip_x][0]
+		ip_x = self._exits[relays[1]]
 
 		# Only use the cached value if it is less than an hour old
-		if ip_x in self._ping_cache and age < 3600: 
+		if ip_x in self._ping_cache and (time.time() - self._ping_cache[ip_x][0]) < 3600: 
+			age = time.time() - self._ping_cache[ip_x][0]
 			r_xd = self._ping_cache[ip_x][1]
 			end = time.time()
 			events['p_xd'] = {
@@ -376,11 +378,11 @@ class Worker:
 
 		start = time.time()
 
-		ip_y = self._utils._exits[relays[2]]
-		age = time.time() - self._ping_cache[ip_y][0]
+		ip_y = self._exits[relays[2]]
 
 		# Only use the cached value if it is less than an hour old
-		if ip_y in self._ping_cache and age < 3600: 
+		if ip_y in self._ping_cache and (time.time() - self._ping_cache[ip_y][0]) < 3600: 
+			age = time.time() - self._ping_cache[ip_y][0]
 			r_sy = self._ping_cache[ip_y][1]
 			end = time.time()
 			events['p_sy'] = {
@@ -443,11 +445,11 @@ class Worker:
 		# Attaches a specific circuit to the given stream (event)
 		def attach_stream(event):
 			try:
-				controller.attach_stream(event.id, self._curr_cid)
+				self._controller.attach_stream(event.id, self._curr_cid)
 			except (OperationFailed, InvalidRequest), error:
 				print(traceback.format_exc())
 				if str(error) in (('Unknown circuit %s' % self._curr_cid), "Can't attach stream to non-open origin circuit"):
-					controller.close_stream(event.id)
+					self._controller.close_stream(event.id)
 				else:
 					raise
 
@@ -459,7 +461,7 @@ class Worker:
 			if event.status == 'NEW' and event.purpose == 'USER':
 				attach_stream(event)
 
-		controller.add_event_listener(probe_stream, EventType.STREAM)
+		self._controller.add_event_listener(probe_stream, EventType.STREAM)
 
 		while(not self._job_stack.empty()):
 			result = {}
@@ -469,7 +471,9 @@ class Worker:
 			#*** GENERALIZE TO MAKE WORK FOR ANY NUMBER OF STARS, ASSUMING THEYRE ON THE ENDS FOR NOW
 			relays = self.build_circuits(job[1:3])
 			
+			result['circuit'] = {}
 			for i in range(len(relays)):
+				result['circuit'][relay_names[i]] = {}
 				result['circuit'][relay_names[i]]['ip'] = self._exits[relays[i]]
 				result['circuit'][relay_names[i]]['fp'] = relays[i]
 
@@ -478,15 +482,16 @@ class Worker:
 				result['events'] = events
 				result['r_xy'] = r_xy
 			except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error, socket.timeout) as exc:
+				result['events'] = {}
 				result['events']['error'] = {
-					'time_occurred' : datetime.datetime.now(),
+					'time_occurred' : str(datetime.datetime.now()),
 					'type' : exc.__class__.__name__,
 					'details' : vars(exc)
 				}
 
 			self._result_queue.put(((nickname_x)+"->"+(nickname_y),result),False)
 
-		controller.close()
+		self._controller.close()
 
 def main():
 	parser = argparse.ArgumentParser(prog='Ting', description='Ting measures round-trip times between two indivudal nodes in the Tor network.')
@@ -495,7 +500,7 @@ def main():
 	parser.add_argument('-m', '--message', help="Message for future reference, describing this particular run",required=True)
 	args = vars(parser.parse_args())
 
-	begin = datetime.datetime.now()
+	begin = str(datetime.datetime.now())
 
 	job_stack = LifoQueue()
 
@@ -537,7 +542,7 @@ def main():
 		result = results_queue.get(False)
 		results['data'][result[0]] = result[1]
 
-	f = open('data/outputs/'+args['output_file'])
+	f = open(args['output_file'],'w')
 	f.write(json.dumps(results, indent=4, separators=(',',': ')))
 	f.close()
 
