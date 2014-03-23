@@ -11,3 +11,6 @@
 
 # Generated binaries
 *.pyc
+
+data/
+tor/
