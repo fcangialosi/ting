@@ -179,10 +179,8 @@ def get_random_pairs(num_pairs):
 """
 Controller class that does all of the work
 """
-class TingWorker(multiprocessing.Process):
+class TingWorker():
 	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, id_num):
-		multiprocessing.Process.__init__(self)
-
 		self.id_num = id_num
 		self._controller_port = controller_port
 		self._socks_port = socks_port
@@ -471,9 +469,9 @@ class TingWorker(multiprocessing.Process):
 		while(not self._job_stack.empty()):
 			result = {}
 			job = self._job_stack.get(False)
-			sys.stdout.write('[%s] [pid=%s] executing job.. %s\n' % (self.id_num, os.getpid(),str(job)))
 			nickname_x = job[4]
 			nickname_y = job[5]
+			sys.stdout.write('[%s] [pid=%s] executing job.. %s\n' % (self.id_num, os.getpid(),(nickname_x)+"->"+(nickname_y)))
 			#*** GENERALIZE TO MAKE WORK FOR ANY NUMBER OF STARS, ASSUMING THEYRE ON THE ENDS FOR NOW
 			relays = self.build_circuits(job[1:3])
 			sys.stdout.write('[%s] [pid=%s] circuits built! %s\n' % (self.id_num, os.getpid(),str(job)))
@@ -494,11 +492,18 @@ class TingWorker(multiprocessing.Process):
 					'type' : exc.__class__.__name__,
 					'details' : vars(exc)
 				}
+			except Queue.Empty:
+				break # empty() is not reliable due to multiprocessing semantics
 
 			self._result_queue.put(((nickname_x)+"->"+(nickname_y),result),False)
 
 		self._controller.close()
 		sys.stdout.write('[%s] completed\n' % (self.id_num))
+
+def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, i):
+	print("Creating worker " + str(i))
+	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i)
+	worker.run()
 
 def main():
 	parser = argparse.ArgumentParser(prog='Ting', description='Ting measures round-trip times between two indivudal nodes in the Tor network.')
@@ -525,15 +530,18 @@ def main():
 	socks_port = 9050
 	destination_port = 6667
 
-	workers = []
 	for i in range(3):
-		workers.append(TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i))
+		multiprocessing.Process(target=create_and_spawn, args=(controller_port, socks_port, destination_port, job_stack, results_queue, i)).start()
 
-	for worker in workers:
-		worker.start()
+	# workers = []
+	# for i in range(3):
+	# 	workers.append(TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i))
 
-	for worker in workers:
-		worker.join()
+	# for worker in workers:
+	# 	worker.start()
+
+	# for worker in workers:
+	# 	worker.join()
 
 	# write output file
 	results = {}
