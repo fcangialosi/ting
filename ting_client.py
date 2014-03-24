@@ -9,7 +9,7 @@ import os
 import subprocess
 from pprint import pprint 
 from numpy import array
-from Queue import Queue, LifoQueue
+import multiprocessing
 import numpy
 import inspect
 import re
@@ -21,6 +21,7 @@ from os.path import join, dirname, isfile
 sys.path.append(join(dirname(__file__), 'libs'))
 from SocksiPy import socks 
 import json
+import random
 
 ting_version = "1.0"
 destination_ip = '128.8.126.92'
@@ -178,18 +179,21 @@ def get_random_pairs(num_pairs):
 """
 Controller class that does all of the work
 """
-class Worker:
-	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue):
+class TingWorker(multiprocessing.Process):
+	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, id_num):
+		multiprocessing.Process.__init__(self)
+
+		self.id_num = id_num
 		self._controller_port = controller_port
 		self._socks_port = socks_port
 		self._destination_port = destination_port
 		self._job_stack = job_stack
 		self._result_queue = result_queue
-		print("[{0}] Worker created with cp {1}, dp {2}, sp {3}".format(datetime.datetime.now(),controller_port,destination_port,socks_port))
+		print("[{0}] Worker created with cp {1}, dp {2}, sp {3} | id=[{4}]".format(datetime.datetime.now(),controller_port,destination_port,socks_port,id_num))
 		self._ping_cache = {}
 		self._exits = get_valid_nodes(destination_port)
 		self._controller = self.initialize_controller()
-		print("[{0}] Controller successfully initialized on port {1}".format(datetime.datetime.now(), controller_port))
+		print("[{0}] Controller successfully initialized on port {1} | id=[{2}]".format(datetime.datetime.now(), controller_port, id_num))
 
 	def initialize_controller(self):
 		controller = Controller.from_port(port = self._controller_port)
@@ -206,6 +210,27 @@ class Worker:
 			if not circ.build_flags or 'IS_INTERNAL' not in circ.build_flags:
 				controller.close_circuit(circ.id)
 
+		# Attaches a specific circuit to the given stream (event)
+		def attach_stream(event):
+			try:
+				self._controller.attach_stream(event.id, self._curr_cid)
+			except (OperationFailed, InvalidRequest), error:
+				print(traceback.format_exc())
+				if str(error) in (('Unknown circuit %s' % self._curr_cid), "Can't attach stream to non-open origin circuit"):
+					self._controller.close_stream(event.id)
+				else:
+					raise
+
+		# An event listener, called whenever StreamEvent status changes
+		def probe_stream(event):
+			if event.status == 'DETACHED':
+				print("[ERROR]: Stream Detached from circuit {0}...".format(curr_cid))
+				#*** WRITE TO STANDARD ERR OR SOMETHING
+			if event.status == 'NEW' and event.purpose == 'USER':
+				attach_stream(event)
+
+		controller.add_event_listener(probe_stream, EventType.STREAM)
+		print("[{0}] Event listener added!".format(self.id_num))
 		return controller
 
 	# Tell socks to use tor as a proxy 
@@ -440,37 +465,18 @@ class Worker:
 		return (events, r_xy)
 
 	# Main execution loop
-	def start(self):
-
-		# Attaches a specific circuit to the given stream (event)
-		def attach_stream(event):
-			try:
-				self._controller.attach_stream(event.id, self._curr_cid)
-			except (OperationFailed, InvalidRequest), error:
-				print(traceback.format_exc())
-				if str(error) in (('Unknown circuit %s' % self._curr_cid), "Can't attach stream to non-open origin circuit"):
-					self._controller.close_stream(event.id)
-				else:
-					raise
-
-		# An event listener, called whenever StreamEvent status changes
-		def probe_stream(event):
-			if event.status == 'DETACHED':
-				print("[ERROR]: Stream Detached from circuit {0}...".format(curr_cid))
-				#*** WRITE TO STANDARD ERR OR SOMETHING
-			if event.status == 'NEW' and event.purpose == 'USER':
-				attach_stream(event)
-
-		self._controller.add_event_listener(probe_stream, EventType.STREAM)
-
+	def run(self):
+		sys.stdout.write('[%s] [pid=%s] now running..\n' % (self.id_num, os.getpid()))
+		
 		while(not self._job_stack.empty()):
 			result = {}
 			job = self._job_stack.get(False)
+			sys.stdout.write('[%s] [pid=%s] executing job.. %s\n' % (self.id_num, os.getpid(),str(job)))
 			nickname_x = job[4]
 			nickname_y = job[5]
 			#*** GENERALIZE TO MAKE WORK FOR ANY NUMBER OF STARS, ASSUMING THEYRE ON THE ENDS FOR NOW
 			relays = self.build_circuits(job[1:3])
-			
+			sys.stdout.write('[%s] [pid=%s] circuits built! %s\n' % (self.id_num, os.getpid(),str(job)))
 			result['circuit'] = {}
 			for i in range(len(relays)):
 				result['circuit'][relay_names[i]] = {}
@@ -492,6 +498,7 @@ class Worker:
 			self._result_queue.put(((nickname_x)+"->"+(nickname_y),result),False)
 
 		self._controller.close()
+		sys.stdout.write('[%s] completed\n' % (self.id_num))
 
 def main():
 	parser = argparse.ArgumentParser(prog='Ting', description='Ting measures round-trip times between two indivudal nodes in the Tor network.')
@@ -502,7 +509,7 @@ def main():
 
 	begin = str(datetime.datetime.now())
 
-	job_stack = LifoQueue()
+	job_stack = multiprocessing.Queue()
 
 	# Read and parse input file
 	f = open(args['input_file'])
@@ -512,14 +519,21 @@ def main():
 	for l in reversed(r):
 		job_stack.put_nowait(list(regex.findall(l)[0]))
 
-	results_queue = Queue()
+	results_queue = multiprocessing.Queue()
 
 	controller_port = 9051
 	socks_port = 9050
 	destination_port = 6667
 
-	w = Worker(controller_port, socks_port, destination_port, job_stack, results_queue)
-	w.start()
+	workers = []
+	for i in range(3):
+		workers.append(TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i))
+
+	for worker in workers:
+		worker.start()
+
+	for worker in workers:
+		worker.join()
 
 	# write output file
 	results = {}
