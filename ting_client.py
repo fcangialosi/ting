@@ -10,6 +10,7 @@ import subprocess
 from pprint import pprint 
 from numpy import array
 import multiprocessing
+import Queue
 import numpy
 import inspect
 import re
@@ -102,7 +103,7 @@ def setup_data_dirs(self):
 
 def get_valid_nodes(destination_port):
 	exit_nodes = {}
-	output_file = "data/nodes/{0}/{1}/validexits_{2}_{3}.txt".format(str(destination_ip.replace(".", "_")), "3_22_2014", str(destination_port), str(1))
+	output_file = "data/nodes/{0}/{1}/validexits_{2}_{3}.txt".format(str(destination_ip.replace(".", "_")), "3_25_2014", str(destination_port), str(1))
 
 	cmd = ['python', 'get_nodes_fast.py', '-di', destination_ip, '-dp', str(destination_port)]
 	p = subprocess.Popen(cmd, shell=False)
@@ -281,6 +282,7 @@ class TingWorker():
 				self._sub_two_id = None
 
 				failed_creating = "W,X,Y,Z"
+				print(str(relays))
 				self._full_id = self._controller.new_circuit(relays, await_build = True)
 				failed_creating = "W,X"
 				self._sub_one_id = self._controller.new_circuit(relays[:2], await_build = True)
@@ -471,7 +473,7 @@ class TingWorker():
 			job = self._job_stack.get(False)
 			nickname_x = job[4]
 			nickname_y = job[5]
-			sys.stdout.write('[%s] [pid=%s] executing job.. %s\n' % (self.id_num, os.getpid(),(nickname_x)+"->"+(nickname_y)))
+			sys.stdout.write('[%s] [pid=%s] executing job.. %s\n' % (self.id_num, os.getpid(),str(job)))
 			#*** GENERALIZE TO MAKE WORK FOR ANY NUMBER OF STARS, ASSUMING THEYRE ON THE ENDS FOR NOW
 			relays = self.build_circuits(job[1:3])
 			sys.stdout.write('[%s] [pid=%s] circuits built! %s\n' % (self.id_num, os.getpid(),str(job)))
@@ -514,7 +516,7 @@ def main():
 
 	begin = str(datetime.datetime.now())
 
-	job_stack = multiprocessing.Queue()
+	job_stack = Queue.Queue()
 
 	# Read and parse input file
 	f = open(args['input_file'])
@@ -524,14 +526,15 @@ def main():
 	for l in reversed(r):
 		job_stack.put_nowait(list(regex.findall(l)[0]))
 
-	results_queue = multiprocessing.Queue()
+	results_queue = Queue.Queue()
 
 	controller_port = 9051
 	socks_port = 9050
 	destination_port = 6667
 
-	for i in range(3):
-		multiprocessing.Process(target=create_and_spawn, args=(controller_port, socks_port, destination_port, job_stack, results_queue, i)).start()
+	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,0)
+	#for i in range(3):
+	#	multiprocessing.Process(target=create_and_spawn, args=(controller_port, socks_port, destination_port, job_stack, results_queue, i)).start()
 
 	# workers = []
 	# for i in range(3):
