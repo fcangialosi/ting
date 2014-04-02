@@ -8,10 +8,8 @@ from random import choice, shuffle
 import os
 import subprocess
 from pprint import pprint 
-from numpy import array
 import multiprocessing
 import Queue
-import numpy
 import inspect
 import re
 import datetime
@@ -103,7 +101,7 @@ def setup_data_dirs(self):
 
 def get_valid_nodes(destination_port):
 	exit_nodes = {}
-	output_file = "data/nodes/{0}/{1}/validexits_{2}_{3}.txt".format(str(destination_ip.replace(".", "_")), "3_25_2014", str(destination_port), str(1))
+	output_file = "data/nodes/{0}/{1}/validexits_{2}_{3}.txt".format(str(destination_ip.replace(".", "_")), "4_2_2014", str(destination_port), str(4))
 
 	cmd = ['python', 'get_nodes_fast.py', '-di', destination_ip, '-dp', str(destination_port)]
 	p = subprocess.Popen(cmd, shell=False)
@@ -152,17 +150,6 @@ def deserialize_ping_data(data):
 	for x in temp:
 		pings.append(float(x))
 	return pings
-
-# Computes typical ping stats for a given array of ting times
-def get_stats(arr):
-	np = array(arr)
-	_avg = numpy.mean(np)
-	_min = numpy.min(np)
-	_max = numpy.max(np)
-	_med = numpy.median(np)
-	_std = numpy.std(np)
-	return {'average':_avg,'min':_min,'max':_max,"median":_med,"std":_std}
-
 
 def get_random_pairs(num_pairs):
 	fps = self._exits.keys()[:num_pairs]
@@ -282,7 +269,6 @@ class TingWorker():
 				self._sub_two_id = None
 
 				failed_creating = "W,X,Y,Z"
-				print(str(relays))
 				self._full_id = self._controller.new_circuit(relays, await_build = True)
 				failed_creating = "W,X"
 				self._sub_one_id = self._controller.new_circuit(relays[:2], await_build = True)
@@ -439,7 +425,7 @@ class TingWorker():
 				'measurements' : r_sy
 			}		
 
-		circuits = [self._full, self._sub_one, self._sub_two]
+		circuits = [self._full_id, self._sub_one_id, self._sub_two_id]
 		paths = ["swxyzd", "swxd", "syzd"]
 		index = 0
 		tings = {}
@@ -456,7 +442,7 @@ class TingWorker():
 			end = time.time()
 			events[path] = {
 				'time_elapsed' : (end-start),
-				'measurements' : arr
+				'measurements' : tings[path]
 			}
 			index += 1
 
@@ -475,8 +461,7 @@ class TingWorker():
 			nickname_y = job[5]
 			sys.stdout.write('[%s] [pid=%s] executing job.. %s\n' % (self.id_num, os.getpid(),str(job)))
 			#*** GENERALIZE TO MAKE WORK FOR ANY NUMBER OF STARS, ASSUMING THEYRE ON THE ENDS FOR NOW
-			relays = self.build_circuits(job[1:3])
-			sys.stdout.write('[%s] [pid=%s] circuits built! %s\n' % (self.id_num, os.getpid(),str(job)))
+			relays = self.build_circuits(job[0:4])
 			result['circuit'] = {}
 			for i in range(len(relays)):
 				result['circuit'][relay_names[i]] = {}
@@ -528,8 +513,8 @@ def main():
 
 	results_queue = Queue.Queue()
 
-	controller_port = 9051
-	socks_port = 9050
+	controller_port = 9451
+	socks_port = 9450
 	destination_port = 6667
 
 	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,0)
@@ -565,7 +550,10 @@ def main():
 	results['data'] = {}
 	while(not results_queue.empty()):
 		result = results_queue.get(False)
-		results['data'][result[0]] = result[1]
+		if(not result[0] in results['data']):
+			results['data'][result[0]] = [result[1]]
+		else:
+			results['data'][result[0]].append(result[1])
 
 	f = open(args['output_file'],'w')
 	f.write(json.dumps(results, indent=4, separators=(',',': ')))
