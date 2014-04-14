@@ -9,6 +9,7 @@ import os
 import subprocess
 from pprint import pprint 
 import multiprocessing
+import numpy
 import Queue
 import inspect
 import re
@@ -21,6 +22,7 @@ sys.path.append(join(dirname(__file__), 'libs'))
 from SocksiPy import socks 
 import json
 import random
+import signal
 
 ting_version = "1.0"
 destination_ip = '128.8.126.92'
@@ -101,12 +103,8 @@ def setup_data_dirs(self):
 
 def get_valid_nodes(destination_port):
 	exit_nodes = {}
-	output_file = "data/nodes/{0}/{1}/validexits_{2}_{3}.txt".format(str(destination_ip.replace(".", "_")), "4_2_2014", str(destination_port), str(4))
+	output_file = "data/nodes/{0}/{1}/validexits_{2}_{3}.txt".format(str(destination_ip.replace(".", "_")), "4_10_2014", str(destination_port), str(1))
 
-	cmd = ['python', 'get_nodes_fast.py', '-di', destination_ip, '-dp', str(destination_port)]
-	p = subprocess.Popen(cmd, shell=False)
-	p.communicate()
-	p.wait()
 	f = open(output_file)
 	
 	escapes = ["#", "\t", "\n"]
@@ -119,15 +117,12 @@ def get_valid_nodes(destination_port):
 	return exit_nodes
 	#*** REMOVE ANY BLACKLISTED STUFF
 
-
-#*** NEED SOME NOTION OF BLACKLIST ME THINKS
-
 # Given an ip, spawns a new process to run standard ping, and returns an array of measurements in ms
 # If any pings timeout, reruns up to five times. After five tries, returns an empty array signaling failure
 def ping(ip):
 	pings = []
 	attempts = 0
-	while((len(pings) < 10) and attempts < 5):
+	while((len(pings) < 6) and attempts < 3):
 		attempts += 1
 		regex = re.compile("(\d+.\d+) ms")
 		cmd = ['ping','-c', '10', ip]
@@ -162,13 +157,39 @@ def get_random_pairs(num_pairs):
 	shuffle(pairs)	
 	return pairs
 
-	#*** MAKE EXITS HASH A GLOBAL OR SOMETHING? SYNC READ SHOULD BE FINE RIGHTTT
+	#*** MAKE EXITS HASH A GLOBAL OR SOMETHING? SYNC READ SHOULD BE FINE RIGHT
+
+def get_stats(arr):
+	np = numpy.array(arr)
+	return [numpy.mean(np),numpy.min(np),numpy.max(np),numpy.median(np),numpy.std(np)]
+
+def remove_outliers(measurements):
+	sorted_arr = numpy.sort(measurements)
+	left = sorted_arr[0:len(sorted_arr)/2]
+	if((len(sorted_arr) % 2) == 0):
+		right = sorted_arr[len(sorted_arr)/2:]
+	else:
+		right = sorted_arr[len(sorted_arr)/2+1:]
+	q1 = int(numpy.median(left))
+	q3 = int(numpy.median(right))
+	iqr = q3 - q1
+	lower = q1 - (1.5*iqr)
+	upper = q3 + (1.5*iqr)
+	if(lower is upper): # All measurements within same integer value
+		return (1.0, measurements)
+	else:
+		good_ones = []
+		for r_xy in measurements:
+			if(lower < r_xy < upper):
+				good_ones.append(r_xy)
+		closeness = float(len(good_ones)) / len(measurements)
+		return (closeness, good_ones)
 
 """
 Controller class that does all of the work
 """
 class TingWorker():
-	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, id_num):
+	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, id_num, source_is_bp):
 		self.id_num = id_num
 		self._controller_port = controller_port
 		self._socks_port = socks_port
@@ -179,7 +200,10 @@ class TingWorker():
 		self._ping_cache = {}
 		self._exits = get_valid_nodes(destination_port)
 		self._controller = self.initialize_controller()
+		self._curr_cid = 0
+		self._source_is_bp = source_is_bp
 		print("[{0}] Controller successfully initialized on port {1} | id=[{2}]".format(datetime.datetime.now(), controller_port, id_num))
+		sys.stdout.flush()
 
 	def initialize_controller(self):
 		controller = Controller.from_port(port = self._controller_port)
@@ -191,7 +215,7 @@ class TingWorker():
 		controller.set_conf("__DisablePredictedCircuits", "1")
 		controller.set_conf("__LeaveStreamsUnattached", "1")
 
-		# Close all non-internal circuits.
+		#Close all non-internal circuits.
 		for circ in controller.get_circuits():
 			if not circ.build_flags or 'IS_INTERNAL' not in circ.build_flags:
 				controller.close_circuit(circ.id)
@@ -210,7 +234,7 @@ class TingWorker():
 		# An event listener, called whenever StreamEvent status changes
 		def probe_stream(event):
 			if event.status == 'DETACHED':
-				print("[ERROR]: Stream Detached from circuit {0}...".format(curr_cid))
+				print("[ERROR]: Stream Detached from circuit {0}...".format(self._curr_cid))
 				#*** WRITE TO STANDARD ERR OR SOMETHING
 			if event.status == 'NEW' and event.purpose == 'USER':
 				attach_stream(event)
@@ -226,25 +250,6 @@ class TingWorker():
 	    sock = socks.socksocket()
 	    sock.settimeout(20) # Streams usually detach within 20 seconds
 	    return sock
-
-	def remove_outliers(self, measurements):
-		sorted_arr = numpy.sort(measurements)
-		left = sorted_arr[0:len(sorted_arr)/2]
-		if((len(sorted_arr) % 2) == 0):
-			right = sorted_arr[len(sorted_arr)/2:]
-		else:
-			right = sorted_arr[len(sorted_arr)/2+1:]
-		q1 = int(numpy.median(left))
-		q3 = int(numpy.median(right))
-		iqr = q3 - q1
-		lower = q1 - (1.5*iqr)
-		upper = q3 + (1.5*iqr)
-		good_ones = []
-		for r_xy in measurements:
-			if(lower < r_xy < upper):
-				good_ones.append(r_xy)
-		closeness = float(len(good_ones)) / len(measurements)
-		return (closeness, good_ones)
 
 	# Builds all necessary circuits for the list of 4 given relays
 	# If no relays given, 4 are chosen at random
@@ -310,7 +315,9 @@ class TingWorker():
 		stable = False
 
 		try:
+			print("trying to connect..")
 			self._sock.connect((destination_ip,self._destination_port))
+			print("connected successfully!")
 			msg = "echo"
 			self._sock.send(msg)
 			data = self._sock.recv(buffer_size)
@@ -337,7 +344,6 @@ class TingWorker():
 						data = self._sock.recv(buffer_size)
 			else:
 				raise NotReachableException("Did not recieve a response over Tor circuit", "t_"+path,'')
-			self._sock.close()
 			return arr
 		except TypeError as exc:
 			print("Failed to connect using the given circuit: ", exc)
@@ -353,7 +359,7 @@ class TingWorker():
 		start = time.time()
 
 		ip_x = self._exits[relays[1]]
-
+		print("ping x")
 		# Only use the cached value if it is less than an hour old
 		if ip_x in self._ping_cache and (time.time() - self._ping_cache[ip_x][0]) < 3600: 
 			age = time.time() - self._ping_cache[ip_x][0]
@@ -390,7 +396,7 @@ class TingWorker():
 		start = time.time()
 
 		ip_y = self._exits[relays[2]]
-
+		print("ping y")
 		# Only use the cached value if it is less than an hour old
 		if ip_y in self._ping_cache and (time.time() - self._ping_cache[ip_y][0]) < 3600: 
 			age = time.time() - self._ping_cache[ip_y][0]
@@ -402,21 +408,26 @@ class TingWorker():
 				'measurements' : r_sy
 			}
 		else: 
-			while(len(r_sy) <= 4):
-				if(count is 3):
-					#***add_to_blacklist(ip_y)
-					raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_y))
-				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-				s.connect((destination_ip, self._destination_port))
-				msg = "ping {0} {1}".format(ip_y, 10)
-				s.send(msg)
-				response = s.recv(1024)
-				s.close()
-				r_sy = deserialize_ping_data(response)
-				if(len(r_sy) < 1):
-					#***add_to_blacklist(ip_y)
-					raise NotReachableException('All ping requests timed out. Probably not a public IP address?','p_xd',str(ip_y))
-				count = count + 1
+			if(self._source_is_bp):
+				while(len(r_sy) <= 4):
+					if(count is 3):
+						#***add_to_blacklist(ip_y)
+						raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_y))
+					s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+					s.connect((destination_ip, self._destination_port))
+					msg = "ping {0} {1}".format(ip_y, 10)
+					s.send(msg)
+					response = s.recv(1024)
+					s.close()
+					r_sy = deserialize_ping_data(response)
+					if(len(r_sy) < 1):
+						#***add_to_blacklist(ip_y)
+						raise NotReachableException('All ping requests timed out. Probably not a public IP address?','p_xd',str(ip_y))
+					count = count + 1
+			else:
+				r_sy = ping(ip_y)
+				if(not r_sy):
+					raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_sy',str(ip_y))
 
 			self._ping_cache[ip_y] = (start, r_sy)
 			end = time.time()
@@ -434,7 +445,7 @@ class TingWorker():
 		for cid in circuits:
 			self._curr_cid = cid
 			path = paths[index]
-
+			print("ting " + path)
 			self._sock = self.setup_proxy()
 			start = time.time()
 			tings[path] = self.ting(path)
@@ -453,43 +464,63 @@ class TingWorker():
 	# Main execution loop
 	def run(self):
 		sys.stdout.write('[%s] [pid=%s] now running..\n' % (self.id_num, os.getpid()))
-		
-		while(not self._job_stack.empty()):
-			result = {}
-			job = self._job_stack.get(False)
-			nickname_x = job[4]
-			nickname_y = job[5]
-			sys.stdout.write('[%s] [pid=%s] executing job.. %s\n' % (self.id_num, os.getpid(),str(job)))
-			#*** GENERALIZE TO MAKE WORK FOR ANY NUMBER OF STARS, ASSUMING THEYRE ON THE ENDS FOR NOW
-			relays = self.build_circuits(job[0:4])
-			result['circuit'] = {}
-			for i in range(len(relays)):
-				result['circuit'][relay_names[i]] = {}
-				result['circuit'][relay_names[i]]['ip'] = self._exits[relays[i]]
-				result['circuit'][relay_names[i]]['fp'] = relays[i]
+		sys.stdout.flush()
 
+		while(not self._job_stack.empty()):			
 			try:
-				events, r_xy = self.find_r_xy(relays)
-				result['events'] = events
-				result['r_xy'] = r_xy
-			except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error, socket.timeout) as exc:
-				result['events'] = {}
-				result['events']['error'] = {
-					'time_occurred' : str(datetime.datetime.now()),
-					'type' : exc.__class__.__name__,
-					'details' : vars(exc)
-				}
+				job = self._job_stack.get(False)
 			except Queue.Empty:
 				break # empty() is not reliable due to multiprocessing semantics
 
-			self._result_queue.put(((nickname_x)+"->"+(nickname_y),result),False)
+			nickname_x = job[4]
+			nickname_y = job[5]
+			sys.stdout.write('[%s] [pid=%s] executing job %s->%s\n' % (self.id_num, os.getpid(),nickname_x,nickname_y))
+			sys.stdout.flush()
+
+			stable = False
+			all_rxy = []
+			while(not stable):
+				result = {}
+				r_xy = 0
+				relays = self.build_circuits(job[1:3]) #***GENERALIZE!
+				result['circuit'] = {}
+				for i in range(len(relays)):
+					result['circuit'][relay_names[i]] = {}
+					result['circuit'][relay_names[i]]['ip'] = self._exits[relays[i]]
+					result['circuit'][relay_names[i]]['fp'] = relays[i]
+				result['worker'] = self.id_num
+				result['iteration'] = (len(all_rxy)+1)
+				try:
+					events, r_xy = self.find_r_xy(relays)
+					result['events'] = events
+					result['r_xy'] = r_xy
+					if(r_xy > 0):
+						all_rxy.append(r_xy)
+				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error, socket.timeout) as exc:
+					result['events'] = {}
+					result['events']['error'] = {
+						'time_occurred' : str(datetime.datetime.now()),
+						'type' : exc.__class__.__name__,
+						'details' : vars(exc)
+					}
+				self._result_queue.put(((nickname_x)+"->"+(nickname_y),result),False)
+				if(len(all_rxy) >= 10):
+					closeness, no_outliers = remove_outliers(all_rxy)
+					if((closeness >= .75) and (numpy.std(no_outliers) < 10)):
+						stable = True
+					if(r_xy):
+						print("[{4}] Just finished iteration {0}, r_xy={1}, closeness={2}, no_outliers={3}".format(result['iteration'],r_xy,closeness,numpy.std(no_outliers),self.id_num))
+				else:
+					if(r_xy):
+						print("[{2}] Just finished iteration {0}, r_xy={1}".format(result['iteration'],r_xy,self.id_num))
 
 		self._controller.close()
 		sys.stdout.write('[%s] completed\n' % (self.id_num))
+		sys.stdout.flush()
 
-def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, i):
-	print("Creating worker " + str(i))
-	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i)
+def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, i, source_is_bp):
+	#print("Creating worker " + str(i))
+	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i, source_is_bp)
 	worker.run()
 
 def main():
@@ -497,6 +528,10 @@ def main():
 	parser.add_argument('-i', '--input-file', help="Path to input file containing settings and list of circuits",required=True)
 	parser.add_argument('-o', '--output-file', help="Path to output file",required=True)
 	parser.add_argument('-m', '--message', help="Message for future reference, describing this particular run",required=True)
+	parser.add_argument('-dp', '--destination-port', help="Port of server running on Bluepill", default=6667)
+	parser.add_argument('-sp', '--socks-port', help="Port being used by Tor", default=9450)
+	parser.add_argument('-cp', '--controller-port', help="Port being used by Stem", default=9451)
+	parser.add_argument('-bp', help="Only include if running this client on Bluepill", action='store_true')
 	args = vars(parser.parse_args())
 
 	begin = str(datetime.datetime.now())
@@ -508,56 +543,53 @@ def main():
 	r = f.readlines()
 	f.close()
 	regex = re.compile("^(\*|\w{40})\s(\*|\w{40})\s(\*|\w{40})\s(\*|\w{40})\s(\w+)->(\w+)$")
-	for l in reversed(r):
+	for l in r:
 		job_stack.put_nowait(list(regex.findall(l)[0]))
 
 	results_queue = Queue.Queue()
 
-	controller_port = 9451
-	socks_port = 9450
-	destination_port = 6667
-
-	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,0)
-	#for i in range(3):
-	#	multiprocessing.Process(target=create_and_spawn, args=(controller_port, socks_port, destination_port, job_stack, results_queue, i)).start()
-
-	# workers = []
-	# for i in range(3):
-	# 	workers.append(TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i))
-
-	# for worker in workers:
-	# 	worker.start()
-
-	# for worker in workers:
-	# 	worker.join()
+	controller_port = int(args['controller_port'])
+	socks_port = int(args['socks_port'])
+	destination_port = int(args['destination_port'])
 
 	# write output file
-	results = {}
-	results['version'] = ting_version
-	results['time_begin'] = begin
-	results['header'] = {
-		'source_ip' : destination_ip,
-		'destination_ip' : destination_ip,
-		'stem_controller_ports' : [controller_port],
-		'socks5_ports' : [socks_port],
-		'destination_ports' : [destination_port],
-		'buffer_size' : buffer_size,
-		'min_tings' : '10',
-		'input_file' : args['input_file'],
-		'output_file' : args['output_file'],
-		'notes' : args['message'] 
-	}
-	results['data'] = {}
-	while(not results_queue.empty()):
-		result = results_queue.get(False)
-		if(not result[0] in results['data']):
-			results['data'][result[0]] = [result[1]]
-		else:
-			results['data'][result[0]].append(result[1])
+	def write_output_file(signal, frame):
+		results = {}
+		results['version'] = ting_version
+		results['time_begin'] = begin
+		results['header'] = {
+			'source_ip' : destination_ip,
+			'destination_ip' : destination_ip,
+			'stem_controller_ports' : [controller_port],
+			'socks5_ports' : [socks_port],
+			'destination_ports' : [destination_port],
+			'buffer_size' : buffer_size,
+			'min_tings' : '10',
+			'input_file' : args['input_file'],
+			'output_file' : args['output_file'],
+			'notes' : args['message'] 
+		}
+		results['data'] = {}
+		while(not results_queue.empty()):
+			result = results_queue.get(False)
+			if(not result[0] in results['data']):
+				results['data'][result[0]] = [result[1]]
+			else:
+				results['data'][result[0]].append(result[1])
 
-	f = open(args['output_file'],'w')
-	f.write(json.dumps(results, indent=4, separators=(',',': ')))
-	f.close()
+		f = open(args['output_file'],'w')
+		f.write(json.dumps(results, indent=4, separators=(',',': ')))
+		f.close()
+		sys.exit(0)
+
+	signal.signal(signal.SIGINT, write_output_file) # Still write output even if process killed
+
+	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,0,args['bp'])
+	#i = int(args['client'])
+	#create_and_spawn(controller_port[i],socks_port[i],destination_port[i],job_stack,results_queue,0,args['bp'])
+	#for i in range(3):
+	#	multiprocessing.Process(target=create_and_spawn, args=(controller_port[i], socks_port[i], destination_port[i], job_stack, results_queue, i)).start()
+	write_output_file(None, None)
 
 if __name__ == "__main__":
 	main()
