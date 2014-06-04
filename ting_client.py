@@ -23,6 +23,7 @@ from SocksiPy import socks
 import json
 import random
 import signal
+import urllib2
 
 ting_version = "1.0"
 destination_ip = '128.8.126.92'
@@ -48,74 +49,57 @@ class NotReachableException(Exception):
 		self.func = func
 		self.dest = dest
 
-
-def createFile(self):
-	"""
-	Create file for output writing, and any 
-	directories needed that do not already exist
-	"""
-	self._current_ting = 1
-	self._ting_dir = args['data_dir'] + "tings/" + "{0}_{1}_{2}".format(now.month, now.day, now.year) + "/"
-	current_dir = os.path.dirname(os.path.realpath(__file__))
-	first_sub = current_dir + "/" + self._ting_dir
-	filenum = 0
-	if(not os.path.exists(first_sub)):
-		os.makedirs(first_sub)
-	else:
-		ting_files = os.listdir(first_sub)
-		regex = re.compile("ting_\w+_(\d+).txt")
-		filenums = []
-		for f in ting_files:
-			filenums.append(int(regex.findall(f)[0]))
-		if not filenums == []:
-			filenum = max(filenums)
-	self._output_file = self._ting_dir + "ting_{0}_{1}.txt".format(self._mode,filenum+1)
-
-	self.writeFileHeader()
-
-def setup_data_dirs(self):
-	current_dir = os.path.dirname(os.path.realpath(__file__))
-	if(not os.path.exists(current_dir + "/" + self._data_dir + "nodes/")):
-		os.makedirs(current_dir + "/" + self._data_dir + "nodes/")
-	if(not os.path.exists(current_dir + "/" + self._data_dir + "tings/")):
-		os.makedirs(current_dir + "/" + self._data_dir + "tings/")
-
-	ip_underscore = self._destination_ip.replace(".", "_")
-	now = datetime.datetime.now()
-	date_underscore = "{0}_{1}_{2}".format(now.month, now.day, now.year)
-	first_sub = current_dir + "/data/nodes/%s" % ip_underscore
-
-	filenum = 1
-	if(os.path.exists(first_sub)):
-			second_sub = first_sub + "/" + date_underscore
-			if(os.path.exists(second_sub)):
-				node_files = os.listdir(second_sub)
-				regex = re.compile("validexits_\d+_(\d+).txt")
-				filenums = []
-				for f in node_files:
-					if "validexits" in f:
-						filenums.append(int(regex.findall(f)[0]))
-				if not filenums == []:
-					filenum = max(filenums)
-
-	self._valid_exits_fname = "{0}nodes/{1}/{2}/validexits_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
-	self._blacklist_fname = "{0}nodes/{1}/{2}/blacklist_{3}_{4}.txt".format(self._data_dir, str(ip_underscore), date_underscore, str(self._destination_port), str(filenum))
+def allows_exiting(exit_policy, destination_port):
+	exit_regex = re.compile('(\d+)-(\d+)')
+	if not 'accept' in exit_policy:
+		if 'reject' in exit_policy:
+			for ports in exit_policy['reject']:
+				r = exit_regex.search(ports)
+				if r and int(r.groups()[0]) <= int(destination_port) <= int(r.groups()[1]):
+					return False
+			return True
+	if destination_port in exit_policy['accept']:
+		return True
+	for ports in exit_policy['accept']:
+		r = exit_regex.search(ports)
+		if r and int(r.groups()[0]) <= int(destination_port) <= int(r.groups()[1]):
+			return True
+	return False
 
 def get_valid_nodes(destination_port):
-	exit_nodes = {}
-	output_file = "data/nodes/{0}/{1}/validexits_{2}_{3}.txt".format(str(destination_ip.replace(".", "_")), "4_10_2014", str(destination_port), str(1))
+	print("Downloading current list of relays and finding best exit nodes...")
+	data = json.load(urllib2.urlopen('https://onionoo.torproject.org/details?type=relay&running=true&fields=nickname,fingerprint,or_addresses,exit_policy_summary,latitude,longitude,flags,host_name,as_name,observed_bandwidth'))
 
-	f = open(output_file)
-	
-	escapes = ["#", "\t", "\n"]
-	for line in f.readlines():
-		if(not line[0] in escapes):
-			relay = line.strip().replace(" ", "").split(",")
-			exit_nodes[relay[0]] = relay[1]
-	f.close()
+	all_relays = {}
+	all_exits = {}
+	good_exits = {}
 
-	return exit_nodes
-	#*** REMOVE ANY BLACKLISTED STUFF
+	for relay in data['relays']:
+		if('or_addresses' in relay):
+			ip = relay['or_addresses'][0].split(':')[0]
+			relay.pop("or_addresses", None)
+			if(allows_exiting(relay['exit_policy_summary'],destination_port)):
+				relay.pop("exit_policy_summary", None)
+				all_exits[ip] = relay
+				#if('observed_bandwidth' in relay):
+				#	if (relay['observed_bandwidth'] > 10000000):
+				#		good_exits[ip] = relay
+				good_exits[ip] = relay
+			relay.pop("exit_policy_summary", None)
+			all_relays[ip] = relay
+	print("Relay lists complete.")
+
+	#good_exits = {}
+
+	#f = open("emulab_nodes.json")
+	#r = f.read()
+	#f.close()
+	#data = json.loads(r)
+	#for relay in data['relays']:
+	#	ip = relay['or_addresses'][0].split(':')[0]
+	#	relay.pop("or_addresses", None)
+	#	good_exits[ip] = relay
+	return (all_relays, all_exits, good_exits)
 
 # Given an ip, spawns a new process to run standard ping, and returns an array of measurements in ms
 # If any pings timeout, reruns up to five times. After five tries, returns an empty array signaling failure
@@ -146,19 +130,6 @@ def deserialize_ping_data(data):
 		pings.append(float(x))
 	return pings
 
-def get_random_pairs(num_pairs):
-	fps = self._exits.keys()[:num_pairs]
-	pairs = []
-	for i in range(num_pairs):
-		j = i+1
-		while(j < num_pairs):
-			pairs.append([fps[i], fps[j]])
-			j += 1
-	shuffle(pairs)	
-	return pairs
-
-	#*** MAKE EXITS HASH A GLOBAL OR SOMETHING? SYNC READ SHOULD BE FINE RIGHT
-
 def get_stats(arr):
 	np = numpy.array(arr)
 	return [numpy.mean(np),numpy.min(np),numpy.max(np),numpy.median(np),numpy.std(np)]
@@ -185,11 +156,9 @@ def remove_outliers(measurements):
 		closeness = float(len(good_ones)) / len(measurements)
 		return (closeness, good_ones)
 
-"""
-Controller class that does all of the work
-"""
+
 class TingWorker():
-	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, id_num, source_is_bp):
+	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, id_num, source_is_bp, write_output_file):
 		self.id_num = id_num
 		self._controller_port = controller_port
 		self._socks_port = socks_port
@@ -198,10 +167,11 @@ class TingWorker():
 		self._result_queue = result_queue
 		print("[{0}] Worker created with cp {1}, dp {2}, sp {3} | id=[{4}]".format(datetime.datetime.now(),controller_port,destination_port,socks_port,id_num))
 		self._ping_cache = {}
-		self._exits = get_valid_nodes(destination_port)
+		self._all_relays, self._all_exits, self._good_exits = get_valid_nodes(destination_port)
 		self._controller = self.initialize_controller()
 		self._curr_cid = 0
 		self._source_is_bp = source_is_bp
+		self._write_output_file = write_output_file
 		print("[{0}] Controller successfully initialized on port {1} | id=[{2}]".format(datetime.datetime.now(), controller_port, id_num))
 		sys.stdout.flush()
 
@@ -214,11 +184,6 @@ class TingWorker():
 			controller.authenticate()
 		controller.set_conf("__DisablePredictedCircuits", "1")
 		controller.set_conf("__LeaveStreamsUnattached", "1")
-
-		#Close all non-internal circuits.
-		for circ in controller.get_circuits():
-			if not circ.build_flags or 'IS_INTERNAL' not in circ.build_flags:
-				controller.close_circuit(circ.id)
 
 		# Attaches a specific circuit to the given stream (event)
 		def attach_stream(event):
@@ -254,7 +219,7 @@ class TingWorker():
 	# Builds all necessary circuits for the list of 4 given relays
 	# If no relays given, 4 are chosen at random
 	# Returns the list of relays used in building circuits
-	def build_circuits(self, relays = []):
+	def build_circuits(self, ips = []):
 		"""
 		Builds all 3 necessary circuits
 		If X,Y are given, tries different pairs of W,Z until all 3 circuits can be created
@@ -264,10 +229,11 @@ class TingWorker():
 		pick_wz = False
 		while True:
 			try:
-				if len(relays) == 2:
-					wz = self.pick_relays(n=2, existing=relays)
-					relays = [wz[0], relays[0], relays[1], wz[1]]
-					pick_wz = True
+				wz = self.pick_good_exits(n=2, existing=ips)
+				all_ips = [wz[0], ips[0], ips[1], wz[1]]
+				relays = []
+				for ip in all_ips:
+					relays.append(self._all_relays[ip]['fingerprint'])
 
 				self._full_id = None
 				self._sub_one_id = None
@@ -280,7 +246,7 @@ class TingWorker():
 				failed_creating = "Y,Z"
 				self._sub_two_id = self._controller.new_circuit(relays[-2:], await_build = True)
 				print("[{0}] All circuits built successfully.".format(str(datetime.datetime.now())))
-				return relays
+				return (relays, all_ips)
 
 			except(InvalidRequest, CircuitExtensionFailed) as exc:
 				print(vars(exc))
@@ -291,21 +257,18 @@ class TingWorker():
 					self._controller.close_circuit(self._sub_one_id)
 				if self._sub_two_id is not None:
 					self._controller.close_circuit(self._sub_two_id)
-				#** PERHAPS WRITE SOMETHING HERE ABOUT BUILD ERROR 
-				if(pick_wz):
-					relays = relays[1:3]
 
 	# N - number of relays to pick
 	# Existing - list of relays already in the circuit being built
 	# Exits - dictionary of valid exit nodes
-	def pick_relays(self, n = 4, existing = []):
-		relays = [0 for x in range(n)]
-		for i in range(len(relays)):
-			temp = choice(self._exits.keys())
-			while(temp in relays or temp in existing):
-				temp = choice(self._exits.keys())
-			relays[i] = temp
-		return relays
+	def pick_good_exits(self, n = 2, existing = []):
+		ips = [0 for x in range(n)]
+		for i in range(len(ips)):
+			temp = choice(self._good_exits.keys())
+			while(temp in ips or temp in existing):
+				temp = choice(self._good_exits.keys())
+			ips[i] = temp
+		return ips
 
 	# Run a ping through a Tor circuit, return array of times measured
 	def ting(self,path):
@@ -319,38 +282,31 @@ class TingWorker():
 			self._sock.connect((destination_ip,self._destination_port))
 			print("connected successfully!")
 			msg = "echo"
-			self._sock.send(msg)
-			data = self._sock.recv(buffer_size)
-			if data == "OKAY":
-				while(not stable):
-					msg = str("ting")
 
-					start_time = time.time()
-					self._sock.send(msg)
-					data = self._sock.recv(buffer_size)
-					end_time = time.time()
+			while(not stable):
+				start_time = time.time()
+				self._sock.send(msg)
+				data = self._sock.recv(buffer_size)
+				end_time = time.time()
 
-					sample = (end_time - start_time)*1000
-					arr.append(sample)
-					if(sample < current_min): 
-						current_min = sample
-						consecutive_min = 0
-					else:
-						consecutive_min += 1
+				sample = (end_time - start_time)*1000
+				arr.append(sample)
+				if(sample < current_min): 
+					current_min = sample
+					consecutive_min = 0
+				else:
+					consecutive_min += 1
 
-					if(consecutive_min >= 10):
-						stable = True
-						self._sock.send("done")
-						data = self._sock.recv(buffer_size)
-			else:
-				raise NotReachableException("Did not recieve a response over Tor circuit", "t_"+path,'')
+				if(consecutive_min >= 10):
+					stable = True
+					self._sock.send("done")
 			return arr
 		except TypeError as exc:
 			print("Failed to connect using the given circuit: ", exc)
 			raise NotReachableException("Failed to connect using the given circuit: ", "t_"+path,'')
 
 	# Run 2 pings and 3 tings, return details of all measurements
-	def find_r_xy(self, relays):
+	def find_r_xy(self, ips):
 		count = 0
 		r_xd = []
 		r_sy = []
@@ -358,7 +314,7 @@ class TingWorker():
 
 		start = time.time()
 
-		ip_x = self._exits[relays[1]]
+		ip_x = ips[1]
 		print("ping x")
 		# Only use the cached value if it is less than an hour old
 		if ip_x in self._ping_cache and (time.time() - self._ping_cache[ip_x][0]) < 3600: 
@@ -395,7 +351,7 @@ class TingWorker():
 
 		start = time.time()
 
-		ip_y = self._exits[relays[2]]
+		ip_y = ips[2]
 		print("ping y")
 		# Only use the cached value if it is less than an hour old
 		if ip_y in self._ping_cache and (time.time() - self._ping_cache[ip_y][0]) < 3600: 
@@ -472,26 +428,35 @@ class TingWorker():
 			except Queue.Empty:
 				break # empty() is not reliable due to multiprocessing semantics
 
-			nickname_x = job[4]
-			nickname_y = job[5]
-			sys.stdout.write('[%s] [pid=%s] executing job %s->%s\n' % (self.id_num, os.getpid(),nickname_x,nickname_y))
+			sys.stdout.write('[%s] [pid=%s] executing job %s->%s\n' % (self.id_num, os.getpid(),job[0],job[1]))
 			sys.stdout.flush()
+
+			if(not job[0] in self._all_exits):
+				print("X is not an exit relay, skipping...")
+				continue
+			if(not job[0] in self._all_relays):
+				print("X is not in our list of relays, skipping...")
+				continue
+			if(not job[1] in self._all_relays):
+				print("Y is not in our list of relays, skipping...")
+				continue
 
 			stable = False
 			all_rxy = []
+			not_reachable = False
 			while(not stable):
 				result = {}
 				r_xy = 0
-				relays = self.build_circuits(job[1:3]) #***GENERALIZE!
+				relays, all_ips = self.build_circuits(job) 
 				result['circuit'] = {}
 				for i in range(len(relays)):
 					result['circuit'][relay_names[i]] = {}
-					result['circuit'][relay_names[i]]['ip'] = self._exits[relays[i]]
+					result['circuit'][relay_names[i]]['ip'] = all_ips[i]
 					result['circuit'][relay_names[i]]['fp'] = relays[i]
 				result['worker'] = self.id_num
 				result['iteration'] = (len(all_rxy)+1)
 				try:
-					events, r_xy = self.find_r_xy(relays)
+					events, r_xy = self.find_r_xy(all_ips)
 					result['events'] = events
 					result['r_xy'] = r_xy
 					if(r_xy > 0):
@@ -503,24 +468,33 @@ class TingWorker():
 						'type' : exc.__class__.__name__,
 						'details' : vars(exc)
 					}
-				self._result_queue.put(((nickname_x)+"->"+(nickname_y),result),False)
+					if(exc.__class__.__name__ is 'NotReachableException'):
+						not_reachable = True
+
+				self._result_queue.put(((all_ips[1])+"->"+(all_ips[2]),result),False)
+				if(not_reachable):
+					break # if it was not reachable building new circuits wont help, just skip this job
+
 				if(len(all_rxy) >= 10):
 					closeness, no_outliers = remove_outliers(all_rxy)
 					if((closeness >= .75) and (numpy.std(no_outliers) < 10)):
+						stable = True
+					elif(len(all_rxy) >= 40):
 						stable = True
 					if(r_xy):
 						print("[{4}] Just finished iteration {0}, r_xy={1}, closeness={2}, no_outliers={3}".format(result['iteration'],r_xy,closeness,numpy.std(no_outliers),self.id_num))
 				else:
 					if(r_xy):
 						print("[{2}] Just finished iteration {0}, r_xy={1}".format(result['iteration'],r_xy,self.id_num))
-
+			self._write_output_file
+			
 		self._controller.close()
 		sys.stdout.write('[%s] completed\n' % (self.id_num))
 		sys.stdout.flush()
 
-def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, i, source_is_bp):
+def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, i, source_is_bp, write_output_file):
 	#print("Creating worker " + str(i))
-	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i, source_is_bp)
+	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i, source_is_bp, write_output_file)
 	worker.run()
 
 def main():
@@ -532,6 +506,7 @@ def main():
 	parser.add_argument('-sp', '--socks-port', help="Port being used by Tor", default=9450)
 	parser.add_argument('-cp', '--controller-port', help="Port being used by Stem", default=9451)
 	parser.add_argument('-bp', help="Only include if running this client on Bluepill", action='store_true')
+	parser.add_argument('-id', help="Unique ID for this instance", default=1)
 	args = vars(parser.parse_args())
 
 	begin = str(datetime.datetime.now())
@@ -542,7 +517,10 @@ def main():
 	f = open(args['input_file'])
 	r = f.readlines()
 	f.close()
-	regex = re.compile("^(\*|\w{40})\s(\*|\w{40})\s(\*|\w{40})\s(\*|\w{40})\s(\w+)->(\w+)$")
+	# regex = re.compile("^(\*|\w{40})\s(\*|\w{40})\s(\*|\w{40})\s(\*|\w{40})\s(\w+)->(\w+)$")
+	# for l in r:
+	# 	job_stack.put_nowait(list(regex.findall(l)[0]))
+	regex = re.compile("^(\d+.\d+.\d+.\d+)\s(\d+.\d+.\d+.\d+)$")
 	for l in r:
 		job_stack.put_nowait(list(regex.findall(l)[0]))
 
@@ -552,8 +530,11 @@ def main():
 	socks_port = int(args['socks_port'])
 	destination_port = int(args['destination_port'])
 
-	# write output file
-	def write_output_file(signal, frame):
+	def catch_sigint(signal, frame):
+		write_output_file()
+		sys.exit(0)
+
+	def write_output_file():
 		results = {}
 		results['version'] = ting_version
 		results['time_begin'] = begin
@@ -580,16 +561,16 @@ def main():
 		f = open(args['output_file'],'w')
 		f.write(json.dumps(results, indent=4, separators=(',',': ')))
 		f.close()
-		sys.exit(0)
 
-	signal.signal(signal.SIGINT, write_output_file) # Still write output even if process killed
+	signal.signal(signal.SIGINT, catch_sigint) # Still write output even if process killed
 
-	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,0,args['bp'])
+	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,args['id'],args['bp'],write_output_file)
 	#i = int(args['client'])
 	#create_and_spawn(controller_port[i],socks_port[i],destination_port[i],job_stack,results_queue,0,args['bp'])
 	#for i in range(3):
 	#	multiprocessing.Process(target=create_and_spawn, args=(controller_port[i], socks_port[i], destination_port[i], job_stack, results_queue, i)).start()
-	write_output_file(None, None)
+	write_output_file()
 
 if __name__ == "__main__":
 	main()
+
