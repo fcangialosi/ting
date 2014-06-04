@@ -1,3 +1,9 @@
+yes | sudo yum install git
+git clone https://github.com/sbfcangialosi/ting.git
+cd ting
+mkdir data
+mkdir data/inputs
+mkdir data/outputs
 cd tor
 tar -zxvf tor-0.2.3.25-patched
 cd tor-0.2.3.25-patched
