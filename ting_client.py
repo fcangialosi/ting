@@ -24,6 +24,7 @@ import json
 import random
 import signal
 import urllib2
+from struct import pack, unpack
 
 ting_version = "1.0"
 destination_ip = '128.8.126.92'
@@ -32,6 +33,8 @@ socks_host = '127.0.0.1'
 socks_type = socks.PROXY_TYPE_SOCKS5
 relay_names = ['w','x','y','z']
 
+def log(msg):
+	print("{0} {1}".format(datetime.datetime.now(), msg))
 
 """
 Thrown when destination is not reachable via a public ip address
@@ -67,7 +70,7 @@ def allows_exiting(exit_policy, destination_port):
 	return False
 
 def get_valid_nodes(destination_port):
-	print("Downloading current list of relays and finding best exit nodes...")
+	log("Downloading current list of relays and finding best exit nodes... (this may take a few seconds)")
 	data = json.load(urllib2.urlopen('https://onionoo.torproject.org/details?type=relay&running=true&fields=nickname,fingerprint,or_addresses,exit_policy_summary,latitude,longitude,flags,host_name,as_name,observed_bandwidth'))
 
 	all_relays = {}
@@ -87,18 +90,7 @@ def get_valid_nodes(destination_port):
 				good_exits[ip] = relay
 			relay.pop("exit_policy_summary", None)
 			all_relays[ip] = relay
-	print("Relay lists complete.")
-
-	#good_exits = {}
-
-	#f = open("emulab_nodes.json")
-	#r = f.read()
-	#f.close()
-	#data = json.loads(r)
-	#for relay in data['relays']:
-	#	ip = relay['or_addresses'][0].split(':')[0]
-	#	relay.pop("or_addresses", None)
-	#	good_exits[ip] = relay
+	log("Found {0} possible exit nodes that accept connections on {1}".format(len(good_exits), destination_port))
 	return (all_relays, all_exits, good_exits)
 
 # Given an ip, spawns a new process to run standard ping, and returns an array of measurements in ms
@@ -158,21 +150,21 @@ def remove_outliers(measurements):
 
 
 class TingWorker():
-	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, id_num, source_is_bp, write_output_file):
-		self.id_num = id_num
+	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, source_is_bp, write_output_file):
 		self._controller_port = controller_port
 		self._socks_port = socks_port
 		self._destination_port = destination_port
 		self._job_stack = job_stack
 		self._result_queue = result_queue
-		print("[{0}] Worker created with cp {1}, dp {2}, sp {3} | id=[{4}]".format(datetime.datetime.now(),controller_port,destination_port,socks_port,id_num))
+		log("Ting running with controller on {0} and socks on {1}".format(controller_port,socks_port))
+		log("Destination is {0}:{1}".format(destination_ip,destination_port))
 		self._ping_cache = {}
 		self._all_relays, self._all_exits, self._good_exits = get_valid_nodes(destination_port)
 		self._controller = self.initialize_controller()
 		self._curr_cid = 0
 		self._source_is_bp = source_is_bp
 		self._write_output_file = write_output_file
-		print("[{0}] Controller successfully initialized on port {1} | id=[{2}]".format(datetime.datetime.now(), controller_port, id_num))
+		log("Controller successfully initialized.")
 		sys.stdout.flush()
 
 	def initialize_controller(self):
@@ -190,22 +182,22 @@ class TingWorker():
 			try:
 				self._controller.attach_stream(event.id, self._curr_cid)
 			except (OperationFailed, InvalidRequest), error:
-				print(traceback.format_exc())
+				log(traceback.format_exc())
 				if str(error) in (('Unknown circuit %s' % self._curr_cid), "Can't attach stream to non-open origin circuit"):
 					self._controller.close_stream(event.id)
+					log("[ERROR]: " + str(error))
 				else:
 					raise
 
 		# An event listener, called whenever StreamEvent status changes
 		def probe_stream(event):
 			if event.status == 'DETACHED':
-				print("[ERROR]: Stream Detached from circuit {0}...".format(self._curr_cid))
+				log("[ERROR]: Stream Detached from circuit {0}...".format(self._curr_cid))
 				#*** WRITE TO STANDARD ERR OR SOMETHING
 			if event.status == 'NEW' and event.purpose == 'USER':
 				attach_stream(event)
 
 		controller.add_event_listener(probe_stream, EventType.STREAM)
-		print("[{0}] Event listener added!".format(self.id_num))
 		return controller
 
 	# Tell socks to use tor as a proxy 
@@ -239,18 +231,22 @@ class TingWorker():
 				self._sub_one_id = None
 				self._sub_two_id = None
 
+				log("Building ciruits...")
 				failed_creating = "W,X,Y,Z"
 				self._full_id = self._controller.new_circuit(relays, await_build = True)
 				failed_creating = "W,X"
 				self._sub_one_id = self._controller.new_circuit(relays[:2], await_build = True)
 				failed_creating = "Y,Z"
 				self._sub_two_id = self._controller.new_circuit(relays[-2:], await_build = True)
-				print("[{0}] All circuits built successfully.".format(str(datetime.datetime.now())))
+				log("All 3 circuits built successfully, using the following relays:\n\tW: {0}\n\tX: {1}\n\tY: {2}\n\tZ: {3}".format(all_ips[0],all_ips[1],all_ips[2],all_ips[3]))
 				return (relays, all_ips)
 
 			except(InvalidRequest, CircuitExtensionFailed) as exc:
-				print(vars(exc))
-				print("FAILED CREATING: " + failed_creating)
+				if('message' in vars(exc)):
+					log("{0} {1}".format(failed_creating, vars(exc)['message']))
+				else:
+					log("[ERROR]: {0} Circuit failed to be created, reason unknown.".format(failed_creating))
+
 				if self._full_id is not None:
 					self._controller.close_circuit(self._full_id)
 				if self._sub_one_id is not None:
@@ -276,20 +272,24 @@ class TingWorker():
 		current_min = 10000000
 		consecutive_min = 0
 		stable = False
-
+		msg = pack("!c", "!")
+		done = pack("!c", "X")
 		try:
-			print("trying to connect..")
+			print("\tTrying to connect..")
 			self._sock.connect((destination_ip,self._destination_port))
-			print("connected successfully!")
-			msg = "echo"
+			print("\tConnected successfully!")
 
 			while(not stable):
 				start_time = time.time()
 				self._sock.send(msg)
-				data = self._sock.recv(buffer_size)
+				print("sent")
+				data = self._sock.recv(1)
 				end_time = time.time()
+				print("recieved " + data)
 
 				sample = (end_time - start_time)*1000
+				print(sample)
+				print(consecutive_min)
 				arr.append(sample)
 				if(sample < current_min): 
 					current_min = sample
@@ -298,11 +298,15 @@ class TingWorker():
 					consecutive_min += 1
 
 				if(consecutive_min >= 10):
+					self._sock.send(done)
+					print("done")
 					stable = True
-					self._sock.send("done")
+					self._sock.close()
 			return arr
-		except TypeError as exc:
-			print("Failed to connect using the given circuit: ", exc)
+		except Exception as exc:
+			if(self._sock):
+				self._sock.close()
+			log("Failed to connect using the given circuit: " + str(exc))
 			raise NotReachableException("Failed to connect using the given circuit: ", "t_"+path,'')
 
 	# Run 2 pings and 3 tings, return details of all measurements
@@ -315,7 +319,7 @@ class TingWorker():
 		start = time.time()
 
 		ip_x = ips[1]
-		print("ping x")
+		log("Ping x...")
 		# Only use the cached value if it is less than an hour old
 		if ip_x in self._ping_cache and (time.time() - self._ping_cache[ip_x][0]) < 3600: 
 			age = time.time() - self._ping_cache[ip_x][0]
@@ -327,32 +331,35 @@ class TingWorker():
 				'measurements' : r_xd
 			}
 		else: 
-			while(len(r_xd) <= 4):
-				if(count is 3):
-					#***add_to_blacklist(ip_x)
-					raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_x))
-				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-				s.connect((destination_ip, self._destination_port))
-				msg = "ping {0} {1}".format(ip_x, 10)
-				s.send(msg)
-				response = s.recv(1024)
-				s.close()
-				r_xd = deserialize_ping_data(response)
-				if(len(r_xd) < 1):
-					#***add_to_blacklist(ip_x)
-					raise NotReachableException('All ping requests timed out. Probably not a public IP address?','p_xd',str(ip_x))
-				count = count + 1
-			self._ping_cache[ip_x] = (start, r_xd)
+			# while(len(r_xd) <= 4):
+			# 	if(count is 3):
+			# 		raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_x))
+			# 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			# 	s.connect((destination_ip, self._destination_port))
+			# 	msg = "ping {0} {1}".format(ip_x, 10)
+			# 	s.send(msg)
+			# 	response = s.recv(1024)
+			# 	s.close()
+			# 	r_xd = deserialize_ping_data(response)
+			# 	if(len(r_xd) < 1):
+			# 		#***add_to_blacklist(ip_x)
+			# 		raise NotReachableException('All ping requests timed out. Probably not a public IP address?','p_xd',str(ip_x))
+			# 	count = count + 1
+			# self._ping_cache[ip_x] = (start, r_xd)
+			r_xd = ping(ip_x)
+			if(not r_xd):
+				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_x))
 			end = time.time()
 			events['p_xd'] = {
 				'time_elapsed' : (end-start),
 				'measurements' : r_xd
 			}
+		log("Results: " + str(r_xd))
 
 		start = time.time()
 
 		ip_y = ips[2]
-		print("ping y")
+		log("Ping y...")
 		# Only use the cached value if it is less than an hour old
 		if ip_y in self._ping_cache and (time.time() - self._ping_cache[ip_y][0]) < 3600: 
 			age = time.time() - self._ping_cache[ip_y][0]
@@ -364,33 +371,34 @@ class TingWorker():
 				'measurements' : r_sy
 			}
 		else: 
-			if(self._source_is_bp):
-				while(len(r_sy) <= 4):
-					if(count is 3):
-						#***add_to_blacklist(ip_y)
-						raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_y))
-					s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-					s.connect((destination_ip, self._destination_port))
-					msg = "ping {0} {1}".format(ip_y, 10)
-					s.send(msg)
-					response = s.recv(1024)
-					s.close()
-					r_sy = deserialize_ping_data(response)
-					if(len(r_sy) < 1):
-						#***add_to_blacklist(ip_y)
-						raise NotReachableException('All ping requests timed out. Probably not a public IP address?','p_xd',str(ip_y))
-					count = count + 1
-			else:
-				r_sy = ping(ip_y)
-				if(not r_sy):
-					raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_sy',str(ip_y))
+			# if(self._source_is_bp):
+			# 	while(len(r_sy) <= 4):
+			# 		if(count is 3):
+			# 			#***add_to_blacklist(ip_y)
+			# 			raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_y))
+			# 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			# 		s.connect((destination_ip, self._destination_port))
+			# 		msg = "ping {0} {1}".format(ip_y, 10)
+			# 		s.send(msg)
+			# 		response = s.recv(1024)
+			# 		s.close()
+			# 		r_sy = deserialize_ping_data(response)
+			# 		if(len(r_sy) < 1):
+			# 			#***add_to_blacklist(ip_y)
+			# 			raise NotReachableException('All ping requests timed out. Probably not a public IP address?','p_xd',str(ip_y))
+			# 		count = count + 1
+			# else:
+			r_sy = ping(ip_y)
+			if(not r_sy):
+				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_sy',str(ip_y))
 
 			self._ping_cache[ip_y] = (start, r_sy)
 			end = time.time()
 			events['p_sy'] = {
 				'time_elapsed' : (end-start),
 				'measurements' : r_sy
-			}		
+			}
+		log("Results: " + str(r_sy))		
 
 		circuits = [self._full_id, self._sub_one_id, self._sub_two_id]
 		paths = ["swxyzd", "swxd", "syzd"]
@@ -401,7 +409,7 @@ class TingWorker():
 		for cid in circuits:
 			self._curr_cid = cid
 			path = paths[index]
-			print("ting " + path)
+			log("Ting " + path)
 			self._sock = self.setup_proxy()
 			start = time.time()
 			tings[path] = self.ting(path)
@@ -411,6 +419,7 @@ class TingWorker():
 				'time_elapsed' : (end-start),
 				'measurements' : tings[path]
 			}
+			log("Results: " + str(tings[path]))
 			index += 1
 
 		r_xy = min(tings['swxyzd']) - min(tings['swxd']) - min(tings['syzd']) + min(r_xd) + min(r_sy)
@@ -419,8 +428,6 @@ class TingWorker():
 
 	# Main execution loop
 	def run(self):
-		sys.stdout.write('[%s] [pid=%s] now running..\n' % (self.id_num, os.getpid()))
-		sys.stdout.flush()
 
 		while(not self._job_stack.empty()):			
 			try:
@@ -428,18 +435,17 @@ class TingWorker():
 			except Queue.Empty:
 				break # empty() is not reliable due to multiprocessing semantics
 
-			sys.stdout.write('[%s] [pid=%s] executing job %s->%s\n' % (self.id_num, os.getpid(),job[0],job[1]))
-			sys.stdout.flush()
+			log('Measuring pair: %s->%s\n' % (job[0],job[1]))
 
-			if(not job[0] in self._all_exits):
-				print("X is not an exit relay, skipping...")
-				continue
-			if(not job[0] in self._all_relays):
-				print("X is not in our list of relays, skipping...")
-				continue
-			if(not job[1] in self._all_relays):
-				print("Y is not in our list of relays, skipping...")
-				continue
+			#if(not job[0] in self._all_exits):
+			#	print("X is not an exit relay, skipping...")
+			#	continue
+			#if(not job[0] in self._all_relays):
+			#	print("X is not in our list of relays, skipping...")
+			#	continue
+			#if(not job[1] in self._all_relays):
+			#	print("Y is not in our list of relays, skipping...")
+			#	continue
 
 			stable = False
 			all_rxy = []
@@ -453,7 +459,6 @@ class TingWorker():
 					result['circuit'][relay_names[i]] = {}
 					result['circuit'][relay_names[i]]['ip'] = all_ips[i]
 					result['circuit'][relay_names[i]]['fp'] = relays[i]
-				result['worker'] = self.id_num
 				result['iteration'] = (len(all_rxy)+1)
 				try:
 					events, r_xy = self.find_r_xy(all_ips)
@@ -473,6 +478,7 @@ class TingWorker():
 
 				self._result_queue.put(((all_ips[1])+"->"+(all_ips[2]),result),False)
 				if(not_reachable):
+					log("NotReachableException: All or most requests")
 					break # if it was not reachable building new circuits wont help, just skip this job
 
 				if(len(all_rxy) >= 10):
@@ -482,19 +488,18 @@ class TingWorker():
 					elif(len(all_rxy) >= 40):
 						stable = True
 					if(r_xy):
-						print("[{4}] Just finished iteration {0}, r_xy={1}, closeness={2}, no_outliers={3}".format(result['iteration'],r_xy,closeness,numpy.std(no_outliers),self.id_num))
+						log("Finished iteration {0}, r_xy={1}, closeness={2}, no_outliers={3}".format(result['iteration'],r_xy,closeness,numpy.std(no_outliers)))
 				else:
 					if(r_xy):
-						print("[{2}] Just finished iteration {0}, r_xy={1}".format(result['iteration'],r_xy,self.id_num))
-			self._write_output_file
+						log("Finished iteration {0}, r_xy={1}".format(result['iteration'],r_xy))
+			log("Saving results...")
+			self._write_output_file()
 			
 		self._controller.close()
-		sys.stdout.write('[%s] completed\n' % (self.id_num))
-		sys.stdout.flush()
 
-def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, i, source_is_bp, write_output_file):
+def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, source_is_bp, write_output_file):
 	#print("Creating worker " + str(i))
-	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, i, source_is_bp, write_output_file)
+	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, source_is_bp, write_output_file)
 	worker.run()
 
 def main():
@@ -506,7 +511,6 @@ def main():
 	parser.add_argument('-sp', '--socks-port', help="Port being used by Tor", default=9450)
 	parser.add_argument('-cp', '--controller-port', help="Port being used by Stem", default=9451)
 	parser.add_argument('-bp', help="Only include if running this client on Bluepill", action='store_true')
-	parser.add_argument('-id', help="Unique ID for this instance", default=1)
 	args = vars(parser.parse_args())
 
 	begin = str(datetime.datetime.now())
@@ -564,7 +568,7 @@ def main():
 
 	signal.signal(signal.SIGINT, catch_sigint) # Still write output even if process killed
 
-	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,args['id'],args['bp'],write_output_file)
+	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,args['bp'],write_output_file)
 	#i = int(args['client'])
 	#create_and_spawn(controller_port[i],socks_port[i],destination_port[i],job_stack,results_queue,0,args['bp'])
 	#for i in range(3):
