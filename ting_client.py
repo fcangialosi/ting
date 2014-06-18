@@ -278,6 +278,7 @@ class TingWorker():
 			print("\tTrying to connect..")
 			self._sock.connect((destination_ip,self._destination_port))
 			print("\tConnected successfully!")
+
 			while(not stable):
 				start_time = time.time()
 				self._sock.send(msg)
@@ -335,22 +336,8 @@ class TingWorker():
 				'measurements' : r_xd
 			}
 		else: 
-			# while(len(r_xd) <= 4):
-			# 	if(count is 3):
-			# 		raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_x))
-			# 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			# 	s.connect((destination_ip, self._destination_port))
-			# 	msg = "ping {0} {1}".format(ip_x, 10)
-			# 	s.send(msg)
-			# 	response = s.recv(1024)
-			# 	s.close()
-			# 	r_xd = deserialize_ping_data(response)
-			# 	if(len(r_xd) < 1):
-			# 		#***add_to_blacklist(ip_x)
-			# 		raise NotReachableException('All ping requests timed out. Probably not a public IP address?','p_xd',str(ip_x))
-			# 	count = count + 1
-			# self._ping_cache[ip_x] = (start, r_xd)
 			r_xd = ping(ip_x)
+			self._ping_cache[ip_x] = (start, r_xd)
 			if(not r_xd):
 				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_x))
 			end = time.time()
@@ -374,29 +361,11 @@ class TingWorker():
 				'elapsed' : (end-start),
 				'measurements' : r_sy
 			}
-		else: 
-			# if(self._source_is_bp):
-			# 	while(len(r_sy) <= 4):
-			# 		if(count is 3):
-			# 			#***add_to_blacklist(ip_y)
-			# 			raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_y))
-			# 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			# 		s.connect((destination_ip, self._destination_port))
-			# 		msg = "ping {0} {1}".format(ip_y, 10)
-			# 		s.send(msg)
-			# 		response = s.recv(1024)
-			# 		s.close()
-			# 		r_sy = deserialize_ping_data(response)
-			# 		if(len(r_sy) < 1):
-			# 			#***add_to_blacklist(ip_y)
-			# 			raise NotReachableException('All ping requests timed out. Probably not a public IP address?','p_xd',str(ip_y))
-			# 		count = count + 1
-			# else:
+		else:
+			self._ping_cache[ip_y] = (start, r_sy) 
 			r_sy = ping(ip_y)
 			if(not r_sy):
 				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_sy',str(ip_y))
-
-			self._ping_cache[ip_y] = (start, r_sy)
 			end = time.time()
 			events['p_sy'] = {
 				'time_elapsed' : (end-start),
@@ -485,17 +454,12 @@ class TingWorker():
 					log("NotReachableException: All or most requests")
 					break # if it was not reachable building new circuits wont help, just skip this job
 
+				if(r_xy):
+					log("Finished iteration {0}, r_xy={1}".format(result['iteration'],r_xy))
+
 				if(len(all_rxy) >= 10):
-					closeness, no_outliers = remove_outliers(all_rxy)
-					if((closeness >= .75) and (numpy.std(no_outliers) < 10)):
-						stable = True
-					elif(len(all_rxy) >= 40):
-						stable = True
-					if(r_xy):
-						log("Finished iteration {0}, r_xy={1}, closeness={2}, no_outliers={3}".format(result['iteration'],r_xy,closeness,numpy.std(no_outliers)))
-				else:
-					if(r_xy):
-						log("Finished iteration {0}, r_xy={1}".format(result['iteration'],r_xy))
+					stable = True
+					
 			log("Saving results...")
 			self._write_output_file()
 			
