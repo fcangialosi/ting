@@ -1,42 +1,29 @@
-import SocketServer
+import socket 
 import sys
 import datetime
 from struct import pack, unpack
 
-response = pack('!c', '!')
+response = pack('!c','!')
 
-class MyTCPHandler(SocketServer.BaseRequestHandler):
-    """
-    The RequestHandler class for our server.
+host = '' 
+port = int(sys.argv[1])
+backlog = 1
+size = 1
 
-    It is instantiated once per connection to the server, and must
-    override the handle() method to implement communication to the
-    client.
-    """
+print("TCP Server listening on port " + str(port)) 
 
-    def handle(self):
-        self.data = self.request.recv(1)
-        print("[{0}] Connected to {1}".format(str(datetime.datetime.now()),str(self.client_address[0])))
-        while (self.data and unpack('!c',self.data) != 'X'):
-            self.request.sendall(response) # echo
-            print(self.data)
-            self.data = self.request.recv(1)
-        print("Connection from client closed.")
-            
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+s.bind((host,port)) 
+s.listen(backlog) 
 
-if __name__ == "__main__":
-    TCP_IP = '128.8.126.92'
-    TCP_PORT = int(sys.argv[1])
-    print("TCP server listening on port " + str(TCP_PORT))
-    # Create the server, binding to localhost on port TCP_PORT
-    server = SocketServer.TCPServer((TCP_IP, TCP_PORT), MyTCPHandler)
-    server.allow_reuse_address = True
-    # Activate the server; this will keep running until you
-    # interrupt the program with Ctrl-C
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("Shutting down...")
-        pass
-    finally:
-        server.server_close()
+while 1: 
+    client, address = s.accept() 
+    print("Connection accepted from " + str(address))
+    data = client.recv(size)
+    print("receieved")
+    while (data and (unpack('!c',data) != 'X')): 
+        client.send(data) 
+        print(data)
+        data = client.recv(size) 
+    client.close()
+    print("Connection closed.")

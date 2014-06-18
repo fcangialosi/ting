@@ -205,7 +205,7 @@ class TingWorker():
 	    socks.setdefaultproxy(socks_type, socks_host, self._socks_port)
 	    socket.socket = socks.socksocket
 	    sock = socks.socksocket()
-	    sock.settimeout(20) # Streams usually detach within 20 seconds
+	    sock.settimeout(10) # Streams usually detach within 20 seconds
 	    return sock
 
 	# Builds all necessary circuits for the list of 4 given relays
@@ -278,7 +278,6 @@ class TingWorker():
 			print("\tTrying to connect..")
 			self._sock.connect((destination_ip,self._destination_port))
 			print("\tConnected successfully!")
-
 			while(not stable):
 				start_time = time.time()
 				self._sock.send(msg)
@@ -301,11 +300,16 @@ class TingWorker():
 					self._sock.send(done)
 					print("done")
 					stable = True
+					self._sock.shutdown(socket.SHUT_RDWR)
 					self._sock.close()
 			return arr
 		except Exception as exc:
 			if(self._sock):
-				self._sock.close()
+				self._sock.send(msg)
+				print("retry sent")
+				data = self._sock.recv(1)
+				print("retry recieved!")
+
 			log("Failed to connect using the given circuit: " + str(exc))
 			raise NotReachableException("Failed to connect using the given circuit: ", "t_"+path,'')
 
@@ -405,15 +409,15 @@ class TingWorker():
 		index = 0
 		tings = {}
 
+		
 		# Ting the 3 tor circuits
 		for cid in circuits:
 			self._curr_cid = cid
+			self._sock = self.setup_proxy()
 			path = paths[index]
 			log("Ting " + path)
-			self._sock = self.setup_proxy()
 			start = time.time()
 			tings[path] = self.ting(path)
-			self._sock = self._sock.close()
 			end = time.time()
 			events[path] = {
 				'time_elapsed' : (end-start),
