@@ -25,3 +25,4 @@ while 1:
         data = client.recv(size) 
     client.close()
     print("Connection closed.")
+    sys.stdout.flush()
