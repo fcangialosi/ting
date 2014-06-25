@@ -1,4 +1,4 @@
-# Any data files generates
+# Any data files generated
 *.txt
 
 # Any auxillary writeup files, only .tex is needed to generate
@@ -12,5 +12,5 @@
 # Generated binaries
 *.pyc
 
-data/
 tor/
+data/

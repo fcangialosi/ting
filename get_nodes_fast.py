@@ -72,7 +72,7 @@ for relay in data['relays']:
 	ip = "NONE"
 	nickname = "NONE"
 	lat = "NONE"
-	log = "NONE"
+	lon = "NONE"
 	country = "NONE"
 	host_name = "NONE"
 	as_name = "NONE"
