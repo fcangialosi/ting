@@ -284,7 +284,7 @@ class TingWorker():
 	def ting(self,path):
 		arr = []
 
-		current_min = 10000000
+		# current_min = 10000000
 		consecutive_min = 0
 		stable = False
 		msg = pack("!c", "!")
@@ -301,16 +301,17 @@ class TingWorker():
 				data = self._sock.recv(1)
 				end_time = time.time()
 
-				sample = (end_time - start_time)*1000
+				sample = (end_time - start_time) * 1000
 
 				arr.append(sample)
-				if(sample < current_min): 
-					current_min = sample
-					consecutive_min = 0
-				else:
-					consecutive_min += 1
+				# if(sample < current_min): 
+				# 	current_min = sample
+				# 	consecutive_min = 0
+				# else:
+				# 	consecutive_min += 1
+				consecutive_min += 1
 
-				if(consecutive_min >= 10):
+				if(consecutive_min >= 50):
 					self._sock.send(done)
 					stable = True
 					self._sock.shutdown(socket.SHUT_RDWR)
@@ -322,7 +323,7 @@ class TingWorker():
 			if(self._sock):
 				self._sock.shutdown(socket.SHUT_RDWR)
 				self._sock.close()
-			raise CircuitConnectionException("Failed to connect using the given circuit: ", "t_"+path, str(exc))
+			raise CircuitConnectionException("Failed to connect using the given circuit: ", "t_"+path, str(e))
 
 	# Run 2 pings and 3 tings, return details of all measurements
 	def find_r_xy(self, ips):
