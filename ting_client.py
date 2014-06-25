@@ -317,10 +317,11 @@ class TingWorker():
 					self._sock.close()
 			return arr
 
-		except Exception as exc:
-			log("Failed to connect using the given circuit: " + str(exc) + "\nClosing connection.")
+		except socket.error, e:
+			log("Failed to connect using the given circuit: " + str(e) + "\nClosing connection.")
+			if isinstance(e.args, tuple):
+				print("\terrno %d" % e[0])
 			if(self._sock):
-				self._sock.send(done)
 				self._sock.shutdown(socket.SHUT_RDWR)
 				self._sock.close()
 			raise CircuitConnectionException("Failed to connect using the given circuit: ", "t_"+path, str(exc))

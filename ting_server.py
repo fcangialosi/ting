@@ -17,12 +17,15 @@ s.bind((host,port))
 s.listen(backlog) 
 
 while 1: 
-    client, address = s.accept() 
-    print("Connection accepted from " + str(address))
-    data = client.recv(size)
-    while (data and (unpack('!c',data) != 'X')): 
-        client.send(data) 
-        data = client.recv(size) 
-    client.close()
-    print("Connection closed.")
-    sys.stdout.flush()
+	try:
+	    client, address = s.accept() 
+	    print("Connection accepted from " + str(address))
+	    data = client.recv(size)
+	    while (data and (unpack('!c',data) != 'X')): 
+	        client.send(data) 
+	        data = client.recv(size) 
+	    client.close()
+	    print("Connection closed.")
+	    sys.stdout.flush()
+	except socket.error, e:
+		print("Socket Error: " + str(e))
