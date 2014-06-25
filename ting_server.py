@@ -20,10 +20,8 @@ while 1:
     client, address = s.accept() 
     print("Connection accepted from " + str(address))
     data = client.recv(size)
-    print("receieved")
     while (data and (unpack('!c',data) != 'X')): 
         client.send(data) 
-        print(data)
         data = client.recv(size) 
     client.close()
     print("Connection closed.")

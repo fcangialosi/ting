@@ -269,11 +269,13 @@ class TingWorker():
 	# Run a ping through a Tor circuit, return array of times measured
 	def ting(self,path):
 		arr = []
+
 		current_min = 10000000
 		consecutive_min = 0
 		stable = False
 		msg = pack("!c", "!")
 		done = pack("!c", "X")
+
 		try:
 			print("\tTrying to connect..")
 			self._sock.connect((destination_ip,self._destination_port))
@@ -282,14 +284,11 @@ class TingWorker():
 			while(not stable):
 				start_time = time.time()
 				self._sock.send(msg)
-				print("sent")
 				data = self._sock.recv(1)
 				end_time = time.time()
-				print("recieved " + data)
 
 				sample = (end_time - start_time)*1000
-				print(sample)
-				print(consecutive_min)
+
 				arr.append(sample)
 				if(sample < current_min): 
 					current_min = sample
@@ -299,19 +298,17 @@ class TingWorker():
 
 				if(consecutive_min >= 10):
 					self._sock.send(done)
-					print("done")
 					stable = True
 					self._sock.shutdown(socket.SHUT_RDWR)
 					self._sock.close()
 			return arr
-		except Exception as exc:
-			if(self._sock):
-				self._sock.send(msg)
-				print("retry sent")
-				data = self._sock.recv(1)
-				print("retry recieved!")
 
-			log("Failed to connect using the given circuit: " + str(exc))
+		except Exception as exc:
+			log("Failed to connect using the given circuit: " + str(exc) + "\nClosing connection.")
+			if(self._sock):
+				self._sock.send(done)
+				self._sock.shutdown(socket.SHUT_RDWR)
+				self._sock.close()
 			raise NotReachableException("Failed to connect using the given circuit: ", "t_"+path,'')
 
 	# Run 2 pings and 3 tings, return details of all measurements
