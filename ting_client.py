@@ -35,12 +35,11 @@ relay_names = ['w','x','y','z']
 
 def log(msg):
 	print("{0} {1}".format(datetime.datetime.now(), msg))
+	sys.stdout.flush()
 
-"""
-Thrown when destination is not reachable via a public ip address
-"""
 class NotReachableException(Exception):
-	"""Exception raised when connections are timing out
+	"""
+	Exception raised when a host is not responding to pings
 
     Attributes:
 		msg -- details about the connection being made
@@ -51,6 +50,22 @@ class NotReachableException(Exception):
 		self.msg = msg
 		self.func = func
 		self.dest = dest
+
+class CircuitConnectionException(Exception):
+	"""
+	Exception raised when we are unable to communicate with the 
+	the desintation through a given circuit
+
+	May be caused if socket.connect() fails, 
+	or if socket.recv() times out
+
+	"""
+
+	def __init__(self, msg, circuit, exc):
+		self.msg = msg
+		self.circuit = circuit
+		self.exc = exc
+
 
 def allows_exiting(exit_policy, destination_port):
 	exit_regex = re.compile('(\d+)-(\d+)')
@@ -308,7 +323,7 @@ class TingWorker():
 				self._sock.send(done)
 				self._sock.shutdown(socket.SHUT_RDWR)
 				self._sock.close()
-			raise NotReachableException("Failed to connect using the given circuit: ", "t_"+path,'')
+			raise CircuitConnectionException("Failed to connect using the given circuit: ", "t_"+path, str(exc))
 
 	# Run 2 pings and 3 tings, return details of all measurements
 	def find_r_xy(self, ips):
@@ -424,7 +439,7 @@ class TingWorker():
 					result['r_xy'] = r_xy
 					if(r_xy > 0):
 						all_rxy.append(r_xy)
-				except (NotReachableException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error, socket.timeout) as exc:
+				except (NotReachableException, CircuitConnectionException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error, socket.timeout) as exc:
 					result['events'] = {}
 					result['events']['error'] = {
 						'time_occurred' : str(datetime.datetime.now()),
@@ -436,7 +451,8 @@ class TingWorker():
 
 				self._result_queue.put(((all_ips[1])+"->"+(all_ips[2]),result),False)
 				if(not_reachable):
-					log("NotReachableException: All or most requests")
+					log("NotReachableException: We couldn't get enough ping responses from X or Y, \
+						so we can't calculate the latency between them. Moving on to the next pair in the list...")
 					break # if it was not reachable building new circuits wont help, just skip this job
 
 				if(r_xy):
@@ -454,7 +470,6 @@ class TingWorker():
 		self._controller.close()
 
 def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, write_output_file):
-	#print("Creating worker " + str(i))
 	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, write_output_file)
 	worker.run()
 
