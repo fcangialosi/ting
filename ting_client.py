@@ -165,7 +165,7 @@ def remove_outliers(measurements):
 
 
 class TingWorker():
-	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, write_output_file):
+	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, flush_to_file):
 		self._controller_port = controller_port
 		self._socks_port = socks_port
 		self._destination_port = destination_port
@@ -177,7 +177,7 @@ class TingWorker():
 		self._all_relays, self._all_exits, self._good_exits = get_valid_nodes(destination_port)
 		self._controller = self.initialize_controller()
 		self._curr_cid = 0
-		self._write_output_file = write_output_file
+		self._flush_to_file = flush_to_file
 		log("Controller successfully initialized.")
 		sys.stdout.flush()
 
@@ -464,12 +464,12 @@ class TingWorker():
 					f.close()
 					
 			log("Saving results...")
-			self._write_output_file()
+			self._flush_to_file()
 			
 		self._controller.close()
 
-def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, write_output_file):
-	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, write_output_file)
+def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, flush_to_file):
+	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, flush_to_file)
 	worker.run()
 
 def main():
@@ -503,42 +503,50 @@ def main():
 	destination_port = int(args['destination_port'])
 
 	def catch_sigint(signal, frame):
-		write_output_file()
+		flush_to_file()
 		sys.exit(0)
 
-	def write_output_file():
+	# Flush anything waiting to be written to the output file on its own line
+	# Accumulating all the results will be done post-processing
+	def flush_to_file():
 		results = {}
-		results['version'] = ting_version
-		results['time_begin'] = begin
-		results['header'] = {
-			'source_ip' : destination_ip,
-			'destination_ip' : destination_ip,
-			'stem_controller_ports' : [controller_port],
-			'socks5_ports' : [socks_port],
-			'destination_ports' : [destination_port],
-			'buffer_size' : buffer_size,
-			'min_tings' : '10',
-			'input_file' : args['input_file'],
-			'output_file' : args['output_file'],
-			'notes' : args['message'] 
-		}
-		results['data'] = {}
 		while(not results_queue.empty()):
 			result = results_queue.get(False)
-			if(not result[0] in results['data']):
-				results['data'][result[0]] = [result[1]]
+			if(not result[0] in results):
+				results[result[0]] = [result[1]]
 			else:
-				results['data'][result[0]].append(result[1])
+				results[result[0]].append(result[1])
 
-		f = open(args['output_file'],'w')
-		f.write(json.dumps(results, indent=4, separators=(',',': ')))
+		f = open(args['output_file'],'a')
+		f.write(json.dumps(results))
+		f.write("\n")
 		f.close()
+
+	header = {}
+	header['version'] = ting_version
+	header['time_begin'] = begin
+	header['header'] = {
+		'source_ip' : destination_ip,
+		'destination_ip' : destination_ip,
+		'stem_controller_port' : controller_port,
+		'socks5_port' : socks_port,
+		'destination_port' : destination_port,
+		'buffer_size' : buffer_size,
+		'min_tings' : '10',
+		'input_file' : args['input_file'],
+		'output_file' : args['output_file'],
+		'notes' : args['message'] 
+	}
+	f = open(args['output_file'], 'w')
+	f.write(json.dumps(header))
+	f.write("\n")
+	f.close()
 
 	signal.signal(signal.SIGINT, catch_sigint) # Still write output even if process killed
 
-	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,write_output_file)
+	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,flush_to_file)
 	
-	write_output_file()
+	flush_to_file()
 
 if __name__ == "__main__":
 	main()
