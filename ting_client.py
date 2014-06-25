@@ -150,7 +150,7 @@ def remove_outliers(measurements):
 
 
 class TingWorker():
-	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, source_is_bp, write_output_file):
+	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, write_output_file):
 		self._controller_port = controller_port
 		self._socks_port = socks_port
 		self._destination_port = destination_port
@@ -162,7 +162,6 @@ class TingWorker():
 		self._all_relays, self._all_exits, self._good_exits = get_valid_nodes(destination_port)
 		self._controller = self.initialize_controller()
 		self._curr_cid = 0
-		self._source_is_bp = source_is_bp
 		self._write_output_file = write_output_file
 		log("Controller successfully initialized.")
 		sys.stdout.flush()
@@ -375,7 +374,6 @@ class TingWorker():
 		index = 0
 		tings = {}
 
-		
 		# Ting the 3 tor circuits
 		for cid in circuits:
 			self._curr_cid = cid
@@ -406,16 +404,6 @@ class TingWorker():
 				break # empty() is not reliable due to multiprocessing semantics
 
 			log('Measuring pair: %s->%s\n' % (job[0],job[1]))
-
-			#if(not job[0] in self._all_exits):
-			#	print("X is not an exit relay, skipping...")
-			#	continue
-			#if(not job[0] in self._all_relays):
-			#	print("X is not in our list of relays, skipping...")
-			#	continue
-			#if(not job[1] in self._all_relays):
-			#	print("Y is not in our list of relays, skipping...")
-			#	continue
 
 			stable = False
 			all_rxy = []
@@ -456,15 +444,18 @@ class TingWorker():
 
 				if(len(all_rxy) >= 10):
 					stable = True
+					f = open('finished.txt', 'w')
+					f.write(job[0] + " " + job[1] + "\n")
+					f.close()
 					
 			log("Saving results...")
 			self._write_output_file()
 			
 		self._controller.close()
 
-def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, source_is_bp, write_output_file):
+def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, write_output_file):
 	#print("Creating worker " + str(i))
-	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, source_is_bp, write_output_file)
+	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, write_output_file)
 	worker.run()
 
 def main():
@@ -473,9 +464,9 @@ def main():
 	parser.add_argument('-o', '--output-file', help="Path to output file",required=True)
 	parser.add_argument('-m', '--message', help="Message for future reference, describing this particular run",required=True)
 	parser.add_argument('-dp', '--destination-port', help="Port of server running on Bluepill", default=6667)
-	parser.add_argument('-sp', '--socks-port', help="Port being used by Tor", default=9450)
-	parser.add_argument('-cp', '--controller-port', help="Port being used by Stem", default=9451)
-	parser.add_argument('-bp', help="Only include if running this client on Bluepill", action='store_true')
+	parser.add_argument('-sp', '--socks-port', help="Port being used by Tor", default=9050)
+	parser.add_argument('-cp', '--controller-port', help="Port being used by Stem", default=9051)
+
 	args = vars(parser.parse_args())
 
 	begin = str(datetime.datetime.now())
@@ -486,9 +477,7 @@ def main():
 	f = open(args['input_file'])
 	r = f.readlines()
 	f.close()
-	# regex = re.compile("^(\*|\w{40})\s(\*|\w{40})\s(\*|\w{40})\s(\*|\w{40})\s(\w+)->(\w+)$")
-	# for l in r:
-	# 	job_stack.put_nowait(list(regex.findall(l)[0]))
+
 	regex = re.compile("^(\d+.\d+.\d+.\d+)\s(\d+.\d+.\d+.\d+)$")
 	for l in r:
 		job_stack.put_nowait(list(regex.findall(l)[0]))
@@ -533,11 +522,8 @@ def main():
 
 	signal.signal(signal.SIGINT, catch_sigint) # Still write output even if process killed
 
-	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,args['bp'],write_output_file)
-	#i = int(args['client'])
-	#create_and_spawn(controller_port[i],socks_port[i],destination_port[i],job_stack,results_queue,0,args['bp'])
-	#for i in range(3):
-	#	multiprocessing.Process(target=create_and_spawn, args=(controller_port[i], socks_port[i], destination_port[i], job_stack, results_queue, i)).start()
+	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,write_output_file)
+	
 	write_output_file()
 
 if __name__ == "__main__":
