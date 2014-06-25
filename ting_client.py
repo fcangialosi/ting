@@ -493,9 +493,16 @@ def main():
 	r = f.readlines()
 	f.close()
 
+	f = open('finished.txt')
+	finished = f.readlines()
+	f.close()
+
 	regex = re.compile("^(\d+.\d+.\d+.\d+)\s(\d+.\d+.\d+.\d+)$")
 	for l in r:
-		job_stack.put_nowait(list(regex.findall(l)[0]))
+		if l in finished:
+			print(l + " has already been measured.")
+		else:
+			job_stack.put_nowait(list(regex.findall(l)[0]))
 
 	results_queue = Queue.Queue()
 
