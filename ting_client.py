@@ -461,7 +461,7 @@ class TingWorker():
 
 				if(len(all_rxy) >= 10):
 					stable = True
-					f = open('finished.txt', 'w')
+					f = open('finished.txt', 'a')
 					f.write(job[0] + " " + job[1] + "\n")
 					f.close()
 					
