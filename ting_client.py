@@ -362,8 +362,8 @@ class TingWorker():
 				'measurements' : r_sy
 			}
 		else:
-			self._ping_cache[ip_y] = (start, r_sy) 
 			r_sy = ping(ip_y)
+			self._ping_cache[ip_y] = (start, r_sy) 
 			if(not r_sy):
 				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_sy',str(ip_y))
 			end = time.time()
