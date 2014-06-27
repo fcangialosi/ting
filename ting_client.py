@@ -230,7 +230,7 @@ class TingWorker():
 	    socks.setdefaultproxy(socks_type, socks_host, self._socks_port)
 	    socket.socket = socks.socksocket
 	    sock = socks.socksocket()
-	    sock.settimeout(10) # Streams usually detach within 20 seconds
+	    sock.settimeout(60) 
 	    return sock
 
 	# Builds all necessary circuits for the list of 4 given relays
@@ -479,7 +479,7 @@ class TingWorker():
 						so we can't calculate the latency between them. Moving on to the next pair in the list...")
 					break # if it was not reachable building new circuits wont help, just skip this job
 
-				if(failures >= 10):
+				if(failures >= 5):
 					log("There have been 10 failures trying to measure this pair. Moving on to the next pair in the list...")
 					with open('bad.txt', 'a') as f:
 						f.write(job[0] + " " + job[1] + "\n")
