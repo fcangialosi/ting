@@ -1,14 +1,19 @@
 AvoidDiskWrites 1
-ControlPort 9151
+ControlPort 9251
 CookieAuthentication 1
 CircuitBuildTimeout 10
 LearnCircuitBuildTimeout 0
 DataDirectory ~/.tor/2/
-DirPort 9130
+DirPort 9230
 DirReqStatistics 0
-DownloadExtraInfo 1
-FetchUselessDescriptors 1
+UseMicrodescriptors 0
 Log notice stdout
-Log notice file tor2.log
 SocksListenAddress 127.0.0.1
-SocksPort 9150
+SocksPort 9250
+WarnUnsafeSocks 0
+ExitPolicy reject *:*
+PublishServerDescriptor 0
+AccountingMax 1 GB
+AccountingStart day 00:00
+RelayBandwidthRate 20 KB
+RelayBandwidthBurst 50 KB

@@ -1,15 +1,15 @@
 AvoidDiskWrites 1
-ControlPort 9151
+ControlPort 9951
 CookieAuthentication 1
 CircuitBuildTimeout 10
 LearnCircuitBuildTimeout 0
-DataDirectory ~/.tor/1/
-DirPort 9130
+DataDirectory ~/.tor/9/
+DirPort 9930
 DirReqStatistics 0
 UseMicrodescriptors 0
 Log notice stdout
 SocksListenAddress 127.0.0.1
-SocksPort 9150
+SocksPort 9950
 WarnUnsafeSocks 0
 ExitPolicy reject *:*
 PublishServerDescriptor 0
