@@ -163,6 +163,17 @@ def remove_outliers(measurements):
 		closeness = float(len(good_ones)) / len(measurements)
 		return (closeness, good_ones)
 
+"""
+Check finished.txt if this pair has been dealt with by another client already
+"""
+def fresh(x, y):
+	pair = x + " " + y 
+	with open('finished.txt') as f:
+		r = f.readlines()
+		for l in r:
+			if pair in l:
+				return False
+	return True
 
 class TingWorker():
 	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, flush_to_file):
@@ -412,17 +423,29 @@ class TingWorker():
 	# Main execution loop
 	def run(self):
 
-		while(not self._job_stack.empty()):			
+		while(not self._job_stack.empty()):
+
 			try:
 				job = self._job_stack.get(False)
 			except Queue.Empty:
-				break # empty() is not reliable due to multiprocessing semantics
+				break # empty() is not necessarily reliable
 
 			log('Measuring pair: %s->%s\n' % (job[0],job[1]))
+
+			# If this is pair is already measured or is currently being worked on, skip it
+			if(not (fresh(job[0],job[1]))):
+				log('This pair has already been dealt with by another client. Moving on to the next one...')
+				continue
+
+			# Add this job to the list prematurely so that other clients know not to work on it
+			# If it is deemed unmeasurable, it will also be added to bad.txt
+			with open('finished.txt', 'a') as f:
+				f.write(job[0] + " " + job[1] + "\n")
 
 			stable = False
 			all_rxy = []
 			not_reachable = False
+			failures = 0
 			while(not stable):
 				result = {}
 				r_xy = 0
@@ -440,6 +463,7 @@ class TingWorker():
 					if(r_xy > 0):
 						all_rxy.append(r_xy)
 				except (NotReachableException, CircuitConnectionException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error, socket.timeout) as exc:
+					failures += 1
 					result['events'] = {}
 					result['events']['error'] = {
 						'time_occurred' : str(datetime.datetime.now()),
@@ -455,17 +479,22 @@ class TingWorker():
 						so we can't calculate the latency between them. Moving on to the next pair in the list...")
 					break # if it was not reachable building new circuits wont help, just skip this job
 
+				if(failures >= 10):
+					log("There have been 10 failures trying to measure this pair. Moving on to the next pair in the list...")
+					with open('bad.txt', 'a') as f:
+						f.write(job[0] + " " + job[1] + "\n")
+					break 
+
 				if(r_xy):
 					log("Finished iteration {0}, r_xy={1}".format(result['iteration'],r_xy))
 
 				if(len(all_rxy) >= 10):
 					stable = True
-					f = open('finished.txt', 'a')
-					f.write(job[0] + " " + job[1] + "\n")
-					f.close()
 					
 			log("Saving results...")
 			self._flush_to_file()
+
+		log('The queue of pairs is now empty. Exiting cleanly.')
 			
 		self._controller.close()
 
@@ -493,16 +522,9 @@ def main():
 	r = f.readlines()
 	f.close()
 
-	f = open('finished.txt')
-	finished = f.readlines()
-	f.close()
-
 	regex = re.compile("^(\d+.\d+.\d+.\d+)\s(\d+.\d+.\d+.\d+)$")
 	for l in r:
-		if l in finished:
-			print(l + " has already been measured.")
-		else:
-			job_stack.put_nowait(list(regex.findall(l)[0]))
+		job_stack.put_nowait(list(regex.findall(l)[0]))
 
 	results_queue = Queue.Queue()
 
@@ -525,11 +547,11 @@ def main():
 			else:
 				results[result[0]].append(result[1])
 
-		f = open(args['output_file'],'a')
-		f.write(json.dumps(results))
-		f.write("\n")
-		f.close()
+		with open(args['output_file'],'a') as f:
+			f.write(json.dumps(results))
+			f.write("\n")
 
+	# Write header information
 	header = {}
 	header['version'] = ting_version
 	header['time_begin'] = begin
