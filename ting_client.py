@@ -325,7 +325,13 @@ class TingWorker():
 				if(consecutive_min >= 50):
 					self._sock.send(done)
 					stable = True
-					self._sock.shutdown(socket.SHUT_RDWR)
+					# Try to shutdown the socket, just in case the
+					# server hasnt already done so. An error in this 
+					# case isnt fatal, just a sign that its already been done
+					try:
+						self._sock.shutdown(socket.SHUT_RDWR)
+					except:
+						pass
 					self._sock.close()
 			return arr
 
