@@ -333,7 +333,7 @@ class TingWorker():
 					except:
 						pass
 					self._sock.close()
-			return arr
+			return [round(x,2) for x in arr]
 
 		except socket.error, e:
 			log("Failed to connect using the given circuit: " + str(e) + "\nClosing connection.")
@@ -360,7 +360,7 @@ class TingWorker():
 			end = time.time()
 			events['p_xd'] = {
 				'cache_age' : age,
-				'elapsed' : (end-start),
+				'elapsed' : round((end-start),2),
 				'measurements' : r_xd
 			}
 		else: 
@@ -370,7 +370,7 @@ class TingWorker():
 				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_x))
 			end = time.time()
 			events['p_xd'] = {
-				'time_elapsed' : (end-start),
+				'time_elapsed' : round((end-start),2),
 				'measurements' : r_xd
 			}
 		log("Results: " + str(r_xd))
@@ -386,7 +386,7 @@ class TingWorker():
 			end = time.time()
 			events['p_sy'] = {
 				'cache_age' : age,
-				'elapsed' : (end-start),
+				'elapsed' : round((end-start),2),
 				'measurements' : r_sy
 			}
 		else:
@@ -396,7 +396,7 @@ class TingWorker():
 				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_sy',str(ip_y))
 			end = time.time()
 			events['p_sy'] = {
-				'time_elapsed' : (end-start),
+				'time_elapsed' : round((end-start),2),
 				'measurements' : r_sy
 			}
 		log("Results: " + str(r_sy))		
@@ -416,13 +416,13 @@ class TingWorker():
 			tings[path] = self.ting(path)
 			end = time.time()
 			events[path] = {
-				'time_elapsed' : (end-start),
+				'time_elapsed' : round((end-start),2),
 				'measurements' : tings[path]
 			}
 			log("Results: " + str(tings[path]))
 			index += 1
 
-		r_xy = min(tings['swxyzd']) - min(tings['swxd']) - min(tings['syzd']) + min(r_xd) + min(r_sy)
+		r_xy = round(min(tings['swxyzd']) - min(tings['swxd']) - min(tings['syzd']) + min(r_xd) + min(r_sy),2)
 
 		return (events, r_xy)
 
