@@ -453,6 +453,7 @@ class TingWorker():
 			while(not stable):
 				result = {}
 				r_xy = 0
+				iteration_start_time = time.time()
 				try:
 					relays, all_ips = self.build_circuits(job) 
 				except KeyError, e:
@@ -469,6 +470,8 @@ class TingWorker():
 					events, r_xy = self.find_r_xy(all_ips)
 					result['events'] = events
 					result['r_xy'] = r_xy
+					iteration_end_time = time.time()
+					result['total_time'] = round((iteration_end_time-iteration_start_time),2)
 					if(r_xy > 0):
 						all_rxy.append(r_xy)
 				except (NotReachableException, CircuitConnectionException, CircuitExtensionFailed, OperationFailed, InvalidRequest, InvalidArguments, socks.Socks5Error, socket.timeout) as exc:
