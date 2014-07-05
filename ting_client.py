@@ -102,7 +102,7 @@ def get_valid_nodes(destination_port):
 			all_relays[ip] = relay
 	log("Found {0} currently running Tor nodes.".format(len(all_relays)))
 	log("Found {0} possible exit nodes that accept connections on {1}".format(len(good_exits), destination_port))
-	return (all_relays, all_exits, good_exits)
+	return (all_relays, good_exits)
 
 # Given an ip, spawns a new process to run standard ping, and returns an array of measurements in ms
 # If any pings timeout, reruns up to five times. After five tries, returns an empty array signaling failure
