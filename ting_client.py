@@ -361,6 +361,8 @@ class TingWorker():
 		if ip_x in self._ping_cache and (time.time() - self._ping_cache[ip_x][0]) < 3600: 
 			age = time.time() - self._ping_cache[ip_x][0]
 			r_xd = self._ping_cache[ip_x][1]
+			if(not r_xd):
+				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_xd',str(ip_x))
 			end = time.time()
 			events['p_xd'] = {
 				'cache_age' : age,
@@ -387,6 +389,8 @@ class TingWorker():
 		if ip_y in self._ping_cache and (time.time() - self._ping_cache[ip_y][0]) < 3600: 
 			age = time.time() - self._ping_cache[ip_y][0]
 			r_sy = self._ping_cache[ip_y][1]
+			if(not r_sy):
+				raise NotReachableException('Could not collect enough ping measurements. Tried 3 times, and got < 5/10 responses each time.','p_sy',str(ip_y))
 			end = time.time()
 			events['p_sy'] = {
 				'cache_age' : age,
