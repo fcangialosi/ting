@@ -13,7 +13,5 @@ SocksPort 9950
 WarnUnsafeSocks 0
 ExitPolicy reject *:*
 PublishServerDescriptor 0
-AccountingMax 1 GB
-AccountingStart day 00:00
-RelayBandwidthRate 20 KB
-RelayBandwidthBurst 50 KB
+RelayBandwidthRate 100 KB
+RelayBandwidthBurst 200 KB

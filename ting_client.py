@@ -59,6 +59,8 @@ class CircuitConnectionException(Exception):
 	May be caused if socket.connect() fails, 
 	or if socket.recv() times out
 
+	Also called when circuit creation continually fails for a given pair
+
 	"""
 
 	def __init__(self, msg, circuit, exc):
@@ -240,7 +242,10 @@ class TingWorker():
 		"""
 
 		pick_wz = False
+		failures = 0
 		while True:
+			if failures >= 10:
+				raise CircuitConnectionException("There have been 10 failed attempts to build circuits through this path. Giving up...", None, None)
 			try:
 				w = self.pick_relays(self._all_relays, n=1, existing=ips)
 				all_ips = [w[0], ips[0], ips[1]]
@@ -265,6 +270,7 @@ class TingWorker():
 				return (relays, all_ips)
 
 			except(InvalidRequest, CircuitExtensionFailed) as exc:
+				failures += 1
 				if('message' in vars(exc)):
 					log("{0} {1}".format(failed_creating, vars(exc)['message']))
 				else:
@@ -458,6 +464,9 @@ class TingWorker():
 					relays, all_ips = self.build_circuits(job) 
 				except KeyError, e:
 					log("[KeyError]: %s is no longer running. Moving on to the next one..." % e)
+					break
+				except CircuitConnectionException, e:
+					log(e.msg)
 					break
 				
 				result['circuit'] = {}
