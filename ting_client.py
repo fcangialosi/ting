@@ -243,11 +243,11 @@ class TingWorker():
 		while True:
 			try:
 				w = self.pick_relays(self._all_relays, n=1, existing=ips)
-				ips = [w[0], ips[0], ips[1]]
-				z = self.pick_relays(self._good_exits, n=1, existing=ips)
-				ips.append(z[0])
+				all_ips = [w[0], ips[0], ips[1]]
+				z = self.pick_relays(self._good_exits, n=1, existing=all_ips)
+				all_ips.append(z[0])
 				relays = []
-				for ip in ips:
+				for ip in all_ips:
 					relays.append(self._all_relays[ip]['fingerprint'])
 
 				self._full_id = None
@@ -453,7 +453,12 @@ class TingWorker():
 			while(not stable):
 				result = {}
 				r_xy = 0
-				relays, all_ips = self.build_circuits(job) 
+				try:
+					relays, all_ips = self.build_circuits(job) 
+				except KeyError, e:
+					log("[KeyError]: %s is no longer running. Moving on to the next one..." % e)
+					break
+				
 				result['circuit'] = {}
 				for i in range(len(relays)):
 					result['circuit'][relay_names[i]] = {}
