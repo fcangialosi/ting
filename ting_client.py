@@ -181,7 +181,7 @@ class TingWorker():
 		log("Ting running with controller on {0} and socks on {1}".format(controller_port,socks_port))
 		log("Destination is {0}:{1}".format(destination_ip,destination_port))
 		self._ping_cache = {}
-		self._all_relays, self._all_exits, self._good_exits = get_valid_nodes(destination_port)
+		self._all_relays, self._good_exits = get_valid_nodes(destination_port)
 		self._controller = self.initialize_controller()
 		self._curr_cid = 0
 		self._flush_to_file = flush_to_file
@@ -242,10 +242,12 @@ class TingWorker():
 		pick_wz = False
 		while True:
 			try:
-				wz = self.pick_good_exits(n=2, existing=ips)
-				all_ips = [wz[0], ips[0], ips[1], wz[1]]
+				w = self.pick_relays(self._all_relays, n=1, existing=ips)
+				ips = [w[0], ips[0], ips[1]]
+				z = self.pick_relays(self._good_exits, n=1, existing=ips)
+				ips.append(z[0])
 				relays = []
-				for ip in all_ips:
+				for ip in ips:
 					relays.append(self._all_relays[ip]['fingerprint'])
 
 				self._full_id = None
@@ -277,13 +279,13 @@ class TingWorker():
 
 	# N - number of relays to pick
 	# Existing - list of relays already in the circuit being built
-	# Exits - dictionary of valid exit nodes
-	def pick_good_exits(self, n = 2, existing = []):
+	# relay_list - list to choose relays from, i.e. good exits (x or z) or all relays (w or y)
+	def pick_relays(self, relay_list, n = 2, existing = []):
 		ips = [0 for x in range(n)]
 		for i in range(len(ips)):
-			temp = choice(self._good_exits.keys())
+			temp = choice(relay_list.keys())
 			while(temp in ips or temp in existing):
-				temp = choice(self._good_exits.keys())
+				temp = choice(relay_list.keys())
 			ips[i] = temp
 		return ips
 
