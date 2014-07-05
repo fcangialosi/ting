@@ -86,25 +86,21 @@ def allows_exiting(exit_policy, destination_port):
 
 def get_valid_nodes(destination_port):
 	log("Downloading current list of relays and finding best exit nodes... (this may take a few seconds)")
-	data = json.load(urllib2.urlopen('https://onionoo.torproject.org/details?type=relay&running=true&fields=nickname,fingerprint,or_addresses,exit_policy_summary,latitude,longitude,flags,host_name,as_name,observed_bandwidth'))
+	data = json.load(urllib2.urlopen('https://onionoo.torproject.org/details?type=relay&running=true&fields=nickname,fingerprint,or_addresses,exit_policy_summary,host_name,as_name'))
 
 	all_relays = {}
-	all_exits = {}
 	good_exits = {}
 
 	for relay in data['relays']:
-		if('or_addresses' in relay):
+		if 'or_addresses' in relay:
 			ip = relay['or_addresses'][0].split(':')[0]
 			relay.pop("or_addresses", None)
-			if(allows_exiting(relay['exit_policy_summary'],destination_port)):
-				relay.pop("exit_policy_summary", None)
-				all_exits[ip] = relay
-				#if('observed_bandwidth' in relay):
-				#	if (relay['observed_bandwidth'] > 10000000):
-				#		good_exits[ip] = relay
+
+			if allows_exiting(relay['exit_policy_summary'],destination_port):
 				good_exits[ip] = relay
-			relay.pop("exit_policy_summary", None)
+
 			all_relays[ip] = relay
+	log("Found {0} currently running Tor nodes.".format(len(all_relays)))
 	log("Found {0} possible exit nodes that accept connections on {1}".format(len(good_exits), destination_port))
 	return (all_relays, all_exits, good_exits)
 
@@ -322,7 +318,7 @@ class TingWorker():
 				# 	consecutive_min += 1
 				consecutive_min += 1
 
-				if(consecutive_min >= 50):
+				if(consecutive_min >= 10):
 					self._sock.send(done)
 					stable = True
 					# Try to shutdown the socket, just in case the
@@ -494,7 +490,7 @@ class TingWorker():
 				if(r_xy):
 					log("Finished iteration {0}, r_xy={1}".format(result['iteration'],r_xy))
 
-				if(len(all_rxy) >= 10):
+				if(len(all_rxy) >= 3):
 					stable = True
 					
 			log("Saving results...")
