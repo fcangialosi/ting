@@ -342,7 +342,10 @@ class TingWorker():
 		except socket.error, e:
 			log("Failed to connect using the given circuit: " + str(e) + "\nClosing connection.")
 			if(self._sock):
-				self._sock.shutdown(socket.SHUT_RDWR)
+				try:
+					self._sock.shutdown(socket.SHUT_RDWR)
+				except:
+					pass
 				self._sock.close()
 			raise CircuitConnectionException("Failed to connect using the given circuit: ", "t_"+path, str(e))
 
