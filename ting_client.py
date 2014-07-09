@@ -193,7 +193,7 @@ class TingWorker():
 	def initialize_controller(self):
 		controller = Controller.from_port(port = self._controller_port)
 		if not controller:
-			sys.stderr.write("ERROR: Couldn't connect to Tor.\n")
+			log("[ERROR]: Couldn't connect to Tor.")
 			sys.exit
 		if not controller.is_authenticated():
 			controller.authenticate()
@@ -204,19 +204,19 @@ class TingWorker():
 		def attach_stream(event):
 			try:
 				self._controller.attach_stream(event.id, self._curr_cid)
-			except (OperationFailed, InvalidRequest), error:
-				log(traceback.format_exc())
-				if str(error) in (('Unknown circuit %s' % self._curr_cid), "Can't attach stream to non-open origin circuit"):
-					self._controller.close_stream(event.id)
-					log("[ERROR]: " + str(error))
-				else:
-					raise
+			except (OperationFailed, InvalidRequest), e:
+				log("[ERROR]: Failed to attach stream to %s, unknown circuit. Closing stream..." % self._curr_cid)
+				print("\tResponse Code: %s " % str(e.code))
+				print("\tMessage: %s" % str(e.message))
+				self._controller.close_stream(event.id)
+				log("Closing and restarting controller...")
+				self._controller.close()
+				self._controller = self.initialize_controller()
 
 		# An event listener, called whenever StreamEvent status changes
 		def probe_stream(event):
 			if event.status == 'DETACHED':
 				log("[ERROR]: Stream Detached from circuit {0}...".format(self._curr_cid))
-				#*** WRITE TO STANDARD ERR OR SOMETHING
 			if event.status == 'NEW' and event.purpose == 'USER':
 				attach_stream(event)
 
