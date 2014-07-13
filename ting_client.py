@@ -114,7 +114,7 @@ def ping(ip):
 	while((len(pings) < 6) and attempts < 3):
 		attempts += 1
 		regex = re.compile("(\d+.\d+) ms")
-		cmd = ['ping','-c', '10', ip]
+		cmd = ['ping', '-i', '0.2', '-c', '10', ip]
 		p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
 		lines = p.stdout.readlines()
 		for line in lines:
