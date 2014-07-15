@@ -515,8 +515,14 @@ def main():
 	parser.add_argument('-dp', '--destination-port', help="Port of server running on Bluepill", default=6667)
 	parser.add_argument('-sp', '--socks-port', help="Port being used by Tor", default=9050)
 	parser.add_argument('-cp', '--controller-port', help="Port being used by Stem", default=9051)
+	parser.add_argument('-id', '--identifier', help="Unique for the current set of running clients")
 
 	args = vars(parser.parse_args())
+
+	pid_file = "pids/client_" + str(args['id']) + ".pid"
+	f = open(pid_file, 'w')
+	f.write(os.getpid())
+	f.close()
 
 	begin = str(datetime.datetime.now())
 
