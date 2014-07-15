@@ -552,9 +552,11 @@ def main():
 			else:
 				results[result[0]].append(result[1])
 
-		with open(args['output_file'],'a') as f:
-			f.write(json.dumps(results))
-			f.write("\n")
+		f = open(args['output_file'],'a')
+		fcntl.flock(f, fcntl.LOCK_EX)
+		f.write(json.dumps(results))
+		f.write("\n")
+		f.close()
 
 	# Write header information
 	header = {}
@@ -573,6 +575,7 @@ def main():
 		'notes' : args['message'] 
 	}
 	f = open(args['output_file'], 'a')
+	fcntl.flock(f, fcntl.LOCK_EX)
 	f.write(json.dumps(header))
 	f.write("\n")
 	f.close()
