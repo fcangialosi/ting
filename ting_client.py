@@ -9,7 +9,6 @@ import os
 import subprocess
 from pprint import pprint 
 import multiprocessing
-import numpy
 import Queue
 import inspect
 import re
@@ -134,32 +133,6 @@ def deserialize_ping_data(data):
 	for x in temp:
 		pings.append(float(x))
 	return pings
-
-def get_stats(arr):
-	np = numpy.array(arr)
-	return [numpy.mean(np),numpy.min(np),numpy.max(np),numpy.median(np),numpy.std(np)]
-
-def remove_outliers(measurements):
-	sorted_arr = numpy.sort(measurements)
-	left = sorted_arr[0:len(sorted_arr)/2]
-	if((len(sorted_arr) % 2) == 0):
-		right = sorted_arr[len(sorted_arr)/2:]
-	else:
-		right = sorted_arr[len(sorted_arr)/2+1:]
-	q1 = int(numpy.median(left))
-	q3 = int(numpy.median(right))
-	iqr = q3 - q1
-	lower = q1 - (1.5*iqr)
-	upper = q3 + (1.5*iqr)
-	if(lower is upper): # All measurements within same integer value
-		return (1.0, measurements)
-	else:
-		good_ones = []
-		for r_xy in measurements:
-			if(lower < r_xy < upper):
-				good_ones.append(r_xy)
-		closeness = float(len(good_ones)) / len(measurements)
-		return (closeness, good_ones)
 
 """
 Check finished.txt if this pair has been dealt with by another client already
