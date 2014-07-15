@@ -156,7 +156,7 @@ class TingWorker():
 		controller = Controller.from_port(port = self._controller_port)
 		if not controller:
 			log("[ERROR]: Couldn't connect to Tor.")
-			sys.exit
+			sys.exit(2)
 		if not controller.is_authenticated():
 			controller.authenticate()
 		controller.set_conf("__DisablePredictedCircuits", "1")
@@ -281,19 +281,13 @@ class TingWorker():
 				sample = (end_time - start_time) * 1000
 
 				arr.append(sample)
-				# if(sample < current_min): 
-				# 	current_min = sample
-				# 	consecutive_min = 0
-				# else:
-				# 	consecutive_min += 1
+
 				consecutive_min += 1
 
 				if(consecutive_min >= 10):
 					self._sock.send(done)
 					stable = True
-					# Try to shutdown the socket, just in case the
-					# server hasnt already done so. An error in this 
-					# case isnt fatal, just a sign that its already been done
+					# Try to shutdown the socket, just in case the server hasnt already done so.
 					try:
 						self._sock.shutdown(socket.SHUT_RDWR)
 					except:
