@@ -24,6 +24,7 @@ import random
 import signal
 import urllib2
 from struct import pack, unpack
+import fcntl
 
 ting_version = "1.0"
 destination_ip = '128.8.126.92'
@@ -133,18 +134,6 @@ def deserialize_ping_data(data):
 	for x in temp:
 		pings.append(float(x))
 	return pings
-
-"""
-Check finished.txt if this pair has been dealt with by another client already
-"""
-def fresh(x, y):
-	pair = x + " " + y 
-	with open('finished.txt') as f:
-		r = f.readlines()
-		for l in r:
-			if pair in l:
-				return False
-	return True
 
 class TingWorker():
 	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, flush_to_file):
@@ -410,6 +399,18 @@ class TingWorker():
 
 		return (events, r_xy)
 
+	def fresh(self, job):
+		pair = job[0] + " " + job[1]
+		f = open('seen.txt', 'r')
+		fcntl.flock(f, fcntl.LOCK_EX) # locks until file available
+		r = f.readlines()
+		f.close()
+		for l in r:
+			if pair in l:
+				return False
+		return True
+
+
 	# Main execution loop
 	def run(self):
 
@@ -422,15 +423,14 @@ class TingWorker():
 
 			log('Measuring pair: %s->%s\n' % (job[0],job[1]))
 
-			# If this is pair is already measured or is currently being worked on, skip it
-			if(not (fresh(job[0],job[1]))):
+			if not self.fresh(job):
 				log('This pair has already been dealt with by another client. Moving on to the next one...')
 				continue
 
-			# Add this job to the list prematurely so that other clients know not to work on it
-			# If it is deemed unmeasurable, it will also be added to bad.txt
-			with open('finished.txt', 'a') as f:
-				f.write(job[0] + " " + job[1] + "\n")
+			f = open('seen.txt', 'a')
+			fcntl.flock(f, fcntl.LOCK_EX)
+			f.write(job[0] + " " + job[1] + "\n")
+			f.close()
 
 			stable = False
 			all_rxy = []
@@ -482,8 +482,12 @@ class TingWorker():
 
 				if(failures >= 5):
 					log("There have been 10 failures trying to measure this pair. Moving on to the next pair in the list...")
-					with open('bad.txt', 'a') as f:
-						f.write(job[0] + " " + job[1] + "\n")
+					
+					f = open('bad.txt', 'a')
+					fcntl.flock(f, fcntl.LOCK_EX)
+					f.write(job[0] + " " + job[1] + "\n")
+					f.close()
+
 					break 
 
 				if(r_xy):
@@ -491,7 +495,13 @@ class TingWorker():
 
 				if(len(all_rxy) >= 3):
 					stable = True
-					
+				
+			if not (failures >= 5):
+				f = open('success.txt', 'a')
+				fcntl.flock(f, fcntl.LOCK_EX)
+				f.write(job[0] + " " + job[1] + "\n")
+				f.close()
+
 			log("Saving results...")
 			self._flush_to_file()
 
@@ -568,7 +578,7 @@ def main():
 		'output_file' : args['output_file'],
 		'notes' : args['message'] 
 	}
-	f = open(args['output_file'], 'w')
+	f = open(args['output_file'], 'a')
 	f.write(json.dumps(header))
 	f.write("\n")
 	f.close()
