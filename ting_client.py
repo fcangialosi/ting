@@ -68,6 +68,9 @@ class CircuitConnectionException(Exception):
 		self.circuit = circuit
 		self.exc = exc
 
+# Message or subject cannot contain single or double quotes
+def send_email(msg, subject, client_id):
+	os.system("echo '{0}' | mailx -r 'frank@bluepill.cs.umd.edu' -s '(Client {1}): {2}' 'fcangialosi94@gmail.com'".format(msg,client,subject))	
 
 def allows_exiting(exit_policy, destination_port):
 	exit_regex = re.compile('(\d+)-(\d+)')
@@ -408,23 +411,32 @@ class TingWorker():
 	# Main execution loop
 	def run(self):
 
+		pairs_since_truth = 0
+		truth_cycle = False
+
 		while(not self._job_stack.empty()):
+			if pairs_since_truth >= 10:
+				job = ('x','y')
+				log('Ground truth measurement of %s->%s\n' % (job[0],job[1]))
+				pairs_since_truth = 0 
+				truth_cycle = False
 
-			try:
-				job = self._job_stack.get(False)
-			except Queue.Empty:
-				break # empty() is not necessarily reliable
+			else:
+				try:
+					job = self._job_stack.get(False)
+				except Queue.Empty:
+					break # empty() is not necessarily reliable
 
-			log('Measuring pair: %s->%s\n' % (job[0],job[1]))
+				log('Measuring pair: %s->%s\n' % (job[0],job[1]))
 
-			if not self.fresh(job):
-				log('This pair has already been dealt with by another client. Moving on to the next one...')
-				continue
+				if not self.fresh(job):
+					log('This pair has already been dealt with by another client. Moving on to the next one...')
+					continue
 
-			f = open('seen.txt', 'a')
-			fcntl.flock(f, fcntl.LOCK_EX)
-			f.write(job[0] + " " + job[1] + "\n")
-			f.close()
+				f = open('seen.txt', 'a')
+				fcntl.flock(f, fcntl.LOCK_EX)
+				f.write(job[0] + " " + job[1] + "\n")
+				f.close()
 
 			stable = False
 			all_rxy = []
@@ -467,6 +479,11 @@ class TingWorker():
 					}
 					if(exc.__class__.__name__ is 'NotReachableException'):
 						not_reachable = True
+
+				if truth_cycle: # Just confirm that the results are as we expected, if so: move on, if not: email
+					result['r_xy']
+
+					break
 
 				self._result_queue.put(((all_ips[1])+"->"+(all_ips[2]),result),False)
 				if(not_reachable):
