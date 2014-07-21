@@ -72,6 +72,9 @@ class CircuitConnectionException(Exception):
 def send_email(msg, subject, client_id):
 	os.system("echo '{0}' | mailx -r 'frank@bluepill.cs.umd.edu' -s '(Client {1}): {2}' 'fcangialosi94@gmail.com'".format(msg,client,subject))	
 
+def send_txt(msg, client_id):
+	os.system("echo '{0}' | mailx -r 'frank@bluepill.cs.umd.edu' -s 'Client {1}' '4103757977@vtext.com'".format(msg,client_id))
+
 def allows_exiting(exit_policy, destination_port):
 	exit_regex = re.compile('(\d+)-(\d+)')
 	if not 'accept' in exit_policy:
@@ -138,8 +141,22 @@ def deserialize_ping_data(data):
 		pings.append(float(x))
 	return pings
 
+def load_ground_truth_pairs():
+	f = open('ground_truth.txt')
+	r = f.readlines()
+	f.close()
+
+	ground_truth_pairs = {}
+	for l in r:
+		line = l.strip().split()
+		pair = (line[0], line[1])
+		real = float(line[2])
+		ground_truth_pairs[pair] = real
+
+	return ground_truth_pairs
+
 class TingWorker():
-	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, flush_to_file):
+	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, flush_to_file, args):
 		self._controller_port = controller_port
 		self._socks_port = socks_port
 		self._destination_port = destination_port
@@ -150,9 +167,11 @@ class TingWorker():
 		self._ping_cache = {}
 		self._all_relays, self._good_exits = get_valid_nodes(destination_port)
 		self._controller = self.initialize_controller()
+		log("Controller successfully initialized.")
 		self._curr_cid = 0
 		self._flush_to_file = flush_to_file
-		log("Controller successfully initialized.")
+		self._args = args
+		self._ground_truth_pairs = load_ground_truth_pairs 
 		sys.stdout.flush()
 
 	def initialize_controller(self):
@@ -407,6 +426,16 @@ class TingWorker():
 				return False
 		return True
 
+	def pick_known_pair():
+		pairs = self._ground_truth_pairs.keys()
+		return choice(pairs)		
+
+	def check_ground_truth(job, measured):
+		real = self._ground_truth_pairs[job]
+		if ((job-5) <= measured <= (job+5)):
+			return True, real
+		else:
+			return False, real
 
 	# Main execution loop
 	def run(self):
@@ -416,10 +445,9 @@ class TingWorker():
 
 		while(not self._job_stack.empty()):
 			if pairs_since_truth >= 10:
-				job = ('x','y')
+				job = self.pick_known_pair()
 				log('Ground truth measurement of %s->%s\n' % (job[0],job[1]))
-				pairs_since_truth = 0 
-				truth_cycle = False
+				truth_cycle = True
 
 			else:
 				try:
@@ -480,12 +508,31 @@ class TingWorker():
 					if(exc.__class__.__name__ is 'NotReachableException'):
 						not_reachable = True
 
-				if truth_cycle: # Just confirm that the results are as we expected, if so: move on, if not: email
-					result['r_xy']
-
-					break
-
 				self._result_queue.put(((all_ips[1])+"->"+(all_ips[2]),result),False)
+
+				if truth_cycle: # Just confirm that the results are as we expected, if so: move on, if not: email
+					if 'error' in result['events']:
+						send_email(str(result['events']['error']),"Error in ground-truth cycle",self._args['client_id'])
+						send_txt("Error in ground-truth cycle", self._args['client_id'])
+						pairs_since_truth += 1
+
+					correct, real = self.check_ground_truth(job, result['r_xy'])
+					if correct:
+						pairs_since_truth = 0 
+						truth_cycle = False
+					else:
+						msg = "Measured latency was {0}, but {1} was expected for {2}.\n".format(result['r_xy'], real, str(job))
+						send_txt(msg, self._args['client_id'])
+						msg += str(result)
+						send_email(msg, "Bad measurement in ground-truth cycle", self._args['client_id'])
+						pairs_since_truth += 1
+
+					if(pairs_since_truth >= 13):
+						pairs_since_truth = 0
+						truth_cycle = False
+					
+					break
+				
 				if(not_reachable):
 					log("NotReachableException: We couldn't get enough ping responses from X or Y, \
 						so we can't calculate the latency between them. Moving on to the next pair in the list...")
@@ -520,8 +567,8 @@ class TingWorker():
 			
 		self._controller.close()
 
-def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, flush_to_file):
-	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, flush_to_file)
+def create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, flush_to_file, args):
+	worker = TingWorker(controller_port, socks_port, destination_port, job_stack, results_queue, flush_to_file, args)
 	worker.run()
 
 def main():
@@ -605,7 +652,7 @@ def main():
 
 	signal.signal(signal.SIGINT, catch_sigint) # Still write output even if process killed
 
-	create_and_spawn(controller_port,socks_port,destination_port,job_stack,results_queue,flush_to_file)
+	create_and_spawn(controller_port, socks_port, destination_port, job_stack, results_queue, flush_to_file, args)
 	
 	flush_to_file()
 
