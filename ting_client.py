@@ -9,7 +9,6 @@ import os
 import subprocess
 from pprint import pprint 
 import multiprocessing
-import numpy
 import Queue
 import inspect
 import re
@@ -25,6 +24,7 @@ import random
 import signal
 import urllib2
 from struct import pack, unpack
+import fcntl
 
 ting_version = "1.0"
 destination_ip = '128.8.126.92'
@@ -68,6 +68,9 @@ class CircuitConnectionException(Exception):
 		self.circuit = circuit
 		self.exc = exc
 
+# Message or subject cannot contain single or double quotes
+def send_email(msg, subject, client_id):
+	os.system("echo '{0}' | mailx -r 'frank@bluepill.cs.umd.edu' -s '(Client {1}): {2}' 'fcangialosi94@gmail.com'".format(msg,client,subject))	
 
 def allows_exiting(exit_policy, destination_port):
 	exit_regex = re.compile('(\d+)-(\d+)')
@@ -135,44 +138,6 @@ def deserialize_ping_data(data):
 		pings.append(float(x))
 	return pings
 
-def get_stats(arr):
-	np = numpy.array(arr)
-	return [numpy.mean(np),numpy.min(np),numpy.max(np),numpy.median(np),numpy.std(np)]
-
-def remove_outliers(measurements):
-	sorted_arr = numpy.sort(measurements)
-	left = sorted_arr[0:len(sorted_arr)/2]
-	if((len(sorted_arr) % 2) == 0):
-		right = sorted_arr[len(sorted_arr)/2:]
-	else:
-		right = sorted_arr[len(sorted_arr)/2+1:]
-	q1 = int(numpy.median(left))
-	q3 = int(numpy.median(right))
-	iqr = q3 - q1
-	lower = q1 - (1.5*iqr)
-	upper = q3 + (1.5*iqr)
-	if(lower is upper): # All measurements within same integer value
-		return (1.0, measurements)
-	else:
-		good_ones = []
-		for r_xy in measurements:
-			if(lower < r_xy < upper):
-				good_ones.append(r_xy)
-		closeness = float(len(good_ones)) / len(measurements)
-		return (closeness, good_ones)
-
-"""
-Check finished.txt if this pair has been dealt with by another client already
-"""
-def fresh(x, y):
-	pair = x + " " + y 
-	with open('finished.txt') as f:
-		r = f.readlines()
-		for l in r:
-			if pair in l:
-				return False
-	return True
-
 class TingWorker():
 	def __init__(self, controller_port, socks_port, destination_port, job_stack, result_queue, flush_to_file):
 		self._controller_port = controller_port
@@ -194,7 +159,7 @@ class TingWorker():
 		controller = Controller.from_port(port = self._controller_port)
 		if not controller:
 			log("[ERROR]: Couldn't connect to Tor.")
-			sys.exit
+			sys.exit(2)
 		if not controller.is_authenticated():
 			controller.authenticate()
 		controller.set_conf("__DisablePredictedCircuits", "1")
@@ -319,19 +284,13 @@ class TingWorker():
 				sample = (end_time - start_time) * 1000
 
 				arr.append(sample)
-				# if(sample < current_min): 
-				# 	current_min = sample
-				# 	consecutive_min = 0
-				# else:
-				# 	consecutive_min += 1
+
 				consecutive_min += 1
 
 				if(consecutive_min >= 10):
 					self._sock.send(done)
 					stable = True
-					# Try to shutdown the socket, just in case the
-					# server hasnt already done so. An error in this 
-					# case isnt fatal, just a sign that its already been done
+					# Try to shutdown the socket, just in case the server hasnt already done so.
 					try:
 						self._sock.shutdown(socket.SHUT_RDWR)
 					except:
@@ -437,27 +396,47 @@ class TingWorker():
 
 		return (events, r_xy)
 
+	def fresh(self, job):
+		pair = job[0] + " " + job[1]
+		f = open('seen.txt', 'r')
+		fcntl.flock(f, fcntl.LOCK_EX) # locks until file available
+		r = f.readlines()
+		f.close()
+		for l in r:
+			if pair in l:
+				return False
+		return True
+
+
 	# Main execution loop
 	def run(self):
 
+		pairs_since_truth = 0
+		truth_cycle = False
+
 		while(not self._job_stack.empty()):
+			if pairs_since_truth >= 10:
+				job = ('x','y')
+				log('Ground truth measurement of %s->%s\n' % (job[0],job[1]))
+				pairs_since_truth = 0 
+				truth_cycle = False
 
-			try:
-				job = self._job_stack.get(False)
-			except Queue.Empty:
-				break # empty() is not necessarily reliable
+			else:
+				try:
+					job = self._job_stack.get(False)
+				except Queue.Empty:
+					break # empty() is not necessarily reliable
 
-			log('Measuring pair: %s->%s\n' % (job[0],job[1]))
+				log('Measuring pair: %s->%s\n' % (job[0],job[1]))
 
-			# If this is pair is already measured or is currently being worked on, skip it
-			if(not (fresh(job[0],job[1]))):
-				log('This pair has already been dealt with by another client. Moving on to the next one...')
-				continue
+				if not self.fresh(job):
+					log('This pair has already been dealt with by another client. Moving on to the next one...')
+					continue
 
-			# Add this job to the list prematurely so that other clients know not to work on it
-			# If it is deemed unmeasurable, it will also be added to bad.txt
-			with open('finished.txt', 'a') as f:
+				f = open('seen.txt', 'a')
+				fcntl.flock(f, fcntl.LOCK_EX)
 				f.write(job[0] + " " + job[1] + "\n")
+				f.close()
 
 			stable = False
 			all_rxy = []
@@ -501,6 +480,11 @@ class TingWorker():
 					if(exc.__class__.__name__ is 'NotReachableException'):
 						not_reachable = True
 
+				if truth_cycle: # Just confirm that the results are as we expected, if so: move on, if not: email
+					result['r_xy']
+
+					break
+
 				self._result_queue.put(((all_ips[1])+"->"+(all_ips[2]),result),False)
 				if(not_reachable):
 					log("NotReachableException: We couldn't get enough ping responses from X or Y, \
@@ -509,8 +493,12 @@ class TingWorker():
 
 				if(failures >= 5):
 					log("There have been 10 failures trying to measure this pair. Moving on to the next pair in the list...")
-					with open('bad.txt', 'a') as f:
-						f.write(job[0] + " " + job[1] + "\n")
+					
+					f = open('bad.txt', 'a')
+					fcntl.flock(f, fcntl.LOCK_EX)
+					f.write(job[0] + " " + job[1] + "\n")
+					f.close()
+
 					break 
 
 				if(r_xy):
@@ -518,7 +506,13 @@ class TingWorker():
 
 				if(len(all_rxy) >= 3):
 					stable = True
-					
+				
+			if not (failures >= 5):
+				f = open('success.txt', 'a')
+				fcntl.flock(f, fcntl.LOCK_EX)
+				f.write(job[0] + " " + job[1] + "\n")
+				f.close()
+
 			log("Saving results...")
 			self._flush_to_file()
 
@@ -538,8 +532,14 @@ def main():
 	parser.add_argument('-dp', '--destination-port', help="Port of server running on Bluepill", default=6667)
 	parser.add_argument('-sp', '--socks-port', help="Port being used by Tor", default=9050)
 	parser.add_argument('-cp', '--controller-port', help="Port being used by Stem", default=9051)
+	parser.add_argument('-id', '--identifier', help="Unique for the current set of running clients")
 
 	args = vars(parser.parse_args())
+
+	pid_file = "pids/client_" + str(args['id']) + ".pid"
+	f = open(pid_file, 'w')
+	f.write(os.getpid())
+	f.close()
 
 	begin = str(datetime.datetime.now())
 
@@ -575,9 +575,11 @@ def main():
 			else:
 				results[result[0]].append(result[1])
 
-		with open(args['output_file'],'a') as f:
-			f.write(json.dumps(results))
-			f.write("\n")
+		f = open(args['output_file'],'a')
+		fcntl.flock(f, fcntl.LOCK_EX)
+		f.write(json.dumps(results))
+		f.write("\n")
+		f.close()
 
 	# Write header information
 	header = {}
@@ -595,7 +597,8 @@ def main():
 		'output_file' : args['output_file'],
 		'notes' : args['message'] 
 	}
-	f = open(args['output_file'], 'w')
+	f = open(args['output_file'], 'a')
+	fcntl.flock(f, fcntl.LOCK_EX)
 	f.write(json.dumps(header))
 	f.write("\n")
 	f.close()
