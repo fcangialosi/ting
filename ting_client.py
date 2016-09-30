@@ -27,7 +27,7 @@ from struct import pack, unpack
 import fcntl
 
 ting_version = "1.0"
-destination_ip = '128.8.126.92'
+destination_ip = '127.0.0.1'
 buffer_size = 64
 socks_host = '127.0.0.1'
 socks_type = socks.PROXY_TYPE_SOCKS5
@@ -583,9 +583,9 @@ def main():
 
 	args = vars(parser.parse_args())
 
-	pid_file = "pids/client_" + str(args['id']) + ".pid"
+	pid_file = "pids/client_" + str(0) + ".pid"
 	f = open(pid_file, 'w')
-	f.write(os.getpid())
+	f.write(str(os.getpid()))
 	f.close()
 
 	begin = str(datetime.datetime.now())
