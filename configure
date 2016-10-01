@@ -11,12 +11,16 @@ sudo apt-get install -y libevent-dev openssl libssl-dev
 # Get our public ip address
 MY_PUBLIC_IP = $(wget http://ipinfo.io/ip -qO -)
 
+# Setup dirs
+mkdir cache results
 
 ###########
 ### TOR ###
 ###########
 
 cd tor
+
+mkdir data logs pids
 
 # Unpack and build version of Tor used by client
 tar -zxvf tor-0.2.3.25-patched.tgz

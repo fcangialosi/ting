@@ -1,0 +1,17 @@
+AvoidDiskWrites 1
+ControlPort 9051
+CookieAuthentication 1
+CircuitBuildTimeout 10
+LearnCircuitBuildTimeout 0
+DataDirectory ./tor/data/client/
+DirPort 9030
+DirReqStatistics 0
+UseMicrodescriptors 0
+Log notice file ./tor/logs/client.log
+SocksListenAddress 127.0.0.1
+SocksPort 9050
+WarnUnsafeSocks 0
+ExitPolicy reject *:*
+PublishServerDescriptor 0
+EnforceDistinctSubnets 0
+RunAsDaemon 1
