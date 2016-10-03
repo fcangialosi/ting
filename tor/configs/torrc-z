@@ -1,18 +1,17 @@
-Nickname tingBPz
 AvoidDiskWrites 1
 ControlPort 9251
 CookieAuthentication 1
 LearnCircuitBuildTimeout 0
-DataDirectory ~/.tor/localz/
+DataDirectory ./tor/data/z/
 ORPort 9002
 DirReqStatistics 0
-UseMicrodescriptors 0
+UseMicroDescriptors 0
 DownloadExtraInfo 1
-FetchUselessDescriptors 1
-Log notice stdout
+Log notice file ./tor/logs/z.log
 SocksListenAddress 127.0.0.1
 SocksPort 9250
 WarnUnsafeSocks 0
-ExitPolicy accept 128.8.124.51:*
-ExitPolicy accept 128.8.126.92:*
+ExitPolicy accept :*
 ExitPolicy reject *:*
+RunAsDaemon 1
+PublishServerDescriptor 1

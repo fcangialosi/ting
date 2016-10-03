@@ -13,5 +13,4 @@ SocksPort 9050
 WarnUnsafeSocks 0
 ExitPolicy reject *:*
 PublishServerDescriptor 0
-EnforceDistinctSubnets 0
 RunAsDaemon 1

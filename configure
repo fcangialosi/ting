@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+
 
 ####################
 ### DEPENDENCIES ###
@@ -64,14 +64,14 @@ ORPort 9001
 DirReqStatistics 0
 UseMicroDescriptors 0
 DownloadExtraInfo 1
-Log notice ./tor/logs/w.log
+Log notice file ./tor/logs/w.log
 SocksListenAddress 127.0.0.1
 SocksPort 9150
 WarnUnsafeSocks 0
 ExitPolicy accept $MY_PUBLIC_IP:*
 ExitPolicy reject *:*
 RunAsDaemon 1
-PublicServerDescriptor 1
+PublishServerDescriptor 1
 EOF
 
 cat <<EOF > ./configs/torrc-z
@@ -84,14 +84,14 @@ ORPort 9002
 DirReqStatistics 0
 UseMicroDescriptors 0
 DownloadExtraInfo 1
-Log notice ./tor/logs/z.log
+Log notice file ./tor/logs/z.log
 SocksListenAddress 127.0.0.1
 SocksPort 9250
 WarnUnsafeSocks 0
 ExitPolicy accept $MY_PUBLIC_IP:*
 ExitPolicy reject *:*
 RunAsDaemon 1
-PublicServerDescriptor 1
+PublishServerDescriptor 1
 EOF
 
 # Start Tor 

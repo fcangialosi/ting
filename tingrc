@@ -1,0 +1,13 @@
+SocksPort 9050
+ControllerPort 9051
+SourceAddr 
+DestinationAddr 
+DestinationPort 16667
+NumSamples 200
+NumRepeats 1
+RelayList internet
+RelayCacheTime 24
+W ,
+Z ,
+SocksTimeout 60
+MaxCircuitBuildAttempts 5
