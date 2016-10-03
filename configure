@@ -1,0 +1,136 @@
+#!/usr/bin/bash
+
+####################
+### DEPENDENCIES ###
+####################
+
+sudo apt-get install -y python-pip
+sudo pip install stem 
+sudo apt-get install -y libevent-dev openssl libssl-dev
+
+# Get our public ip address
+MY_PUBLIC_IP = $(wget http://ipinfo.io/ip -qO -)
+
+# Setup dirs
+mkdir cache results
+
+###########
+### TOR ###
+###########
+
+cd tor
+
+mkdir data logs pids
+
+# Unpack and build version of Tor used by client
+tar -zxvf tor-0.2.3.25-patched.tgz
+cd tor-0.2.3.25-patched/
+./configure && make
+cd .. 
+
+# Unpack and build version of Tor used by W and Z
+tar -zxvf tor-0.2.4.22.tar.gz
+cd tor-0.2.4.22/
+./configure && make 
+cd ..
+
+# Generate torrc files
+cat <<EOF > ./configs/torrc-client
+AvoidDiskWrites 1
+ControlPort 9051
+CookieAuthentication 1
+CircuitBuildTimeout 10
+LearnCircuitBuildTimeout 0
+DataDirectory ./tor/data/client/
+DirPort 9030
+DirReqStatistics 0
+UseMicrodescriptors 0
+Log notice file ./tor/logs/client.log
+SocksListenAddress 127.0.0.1
+SocksPort 9050
+WarnUnsafeSocks 0
+ExitPolicy reject *:*
+PublishServerDescriptor 0
+RunAsDaemon 1
+EOF
+
+cat <<EOF > ./configs/torrc-w
+AvoidDiskWrites 1
+ControlPort 9151
+CookieAuthentication 1
+LearnCircuitBuildTimeout 0
+DataDirectory ./tor/data/w/
+ORPort 9001
+DirReqStatistics 0
+UseMicroDescriptors 0
+DownloadExtraInfo 1
+Log notice ./tor/logs/w.log
+SocksListenAddress 127.0.0.1
+SocksPort 9150
+WarnUnsafeSocks 0
+ExitPolicy accept $MY_PUBLIC_IP:*
+ExitPolicy reject *:*
+RunAsDaemon 1
+PublicServerDescriptor 1
+EOF
+
+cat <<EOF > ./configs/torrc-z
+AvoidDiskWrites 1
+ControlPort 9251
+CookieAuthentication 1
+LearnCircuitBuildTimeout 0
+DataDirectory ./tor/data/z/
+ORPort 9002
+DirReqStatistics 0
+UseMicroDescriptors 0
+DownloadExtraInfo 1
+Log notice ./tor/logs/z.log
+SocksListenAddress 127.0.0.1
+SocksPort 9250
+WarnUnsafeSocks 0
+ExitPolicy accept $MY_PUBLIC_IP:*
+ExitPolicy reject *:*
+RunAsDaemon 1
+PublicServerDescriptor 1
+EOF
+
+# Start Tor 
+tor-0.2.3.25-patched/src/or/tor -f configs/torrc-client
+tor-0.2.4.22/src/or/tor -f configs/torrc-w
+tor-0.2.4.22/src/or/tor -f configs/torrc-z
+
+cd ..
+
+
+
+# Give them some time to start up
+sleep 5
+
+# Determine the fingerprint of W and Z 
+FP_W = $(cat ./.tor/w/fingerprint | cut -f2 -d" ")
+FP_Z = $(cat ./.tor/z/fingerprint | cut -f2 -d" ")
+
+
+
+############
+### TING ###
+############
+
+# Generate default tingrc file
+cat <<EOF > ./tingrc
+SocksPort 9050
+ControllerPort 9051
+SourceAddr $MY_PUBLIC_IP
+DestinationAddr $MY_PUBLIC_IP
+DestinationPort 16667
+NumSamples 200
+NumRepeats 1
+RelayList internet
+RelayCacheTime 24
+W $MY_PUBLIC_IP,$FP_W
+Z $MY_PUBLIC_IP,$FP_Z
+SocksTimeout 60
+MaxCircuitBuildAttempts 5
+EOF
+
+

@@ -1,17 +1,18 @@
+Nickname tingBPw
 AvoidDiskWrites 1
 ControlPort 9151
 CookieAuthentication 1
-CircuitBuildTimeout 10
 LearnCircuitBuildTimeout 0
-DataDirectory ~/.tor/1/
-DirPort 9130
+DataDirectory ~/.tor/localw/
+ORPort 9001
 DirReqStatistics 0
 UseMicrodescriptors 0
+DownloadExtraInfo 1
+FetchUselessDescriptors 1
 Log notice stdout
 SocksListenAddress 127.0.0.1
 SocksPort 9150
 WarnUnsafeSocks 0
+ExitPolicy accept 128.8.124.51:*
+ExitPolicy accept 128.8.126.92:*
 ExitPolicy reject *:*
-PublishServerDescriptor 0
-RelayBandwidthRate 100 KB
-RelayBandwidthBurst 200 KB
