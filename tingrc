@@ -1,13 +1,13 @@
 SocksPort 9050
 ControllerPort 9051
-SourceAddr 
-DestinationAddr 
+SourceAddr 128.255.44.24
+DestinationAddr 128.255.44.24
 DestinationPort 16667
 NumSamples 200
 NumRepeats 1
 RelayList internet
 RelayCacheTime 24
-W ,
-Z ,
+W 128.255.44.24,64D8798F5344EB8E15F52361F844A7A817600CD0
+Z 128.255.44.24,BDF33F7A5C13D7187F99A82CEC45B4D5AADCF873
 SocksTimeout 60
 MaxCircuitBuildAttempts 5

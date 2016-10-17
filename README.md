@@ -34,6 +34,7 @@ This will:
   - generate default Tor configuration files 
   - start running the Tor client and servers as daemons
   - generate a default Ting configuration file
+  - start the echo server for Ting to connect to for measurements
 
 If you'd like more control over all of the settings, or run into any issues
 during setup, please check out Section 4, which describes Ting's configuration

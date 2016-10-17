@@ -79,6 +79,7 @@ class CircuitConnectionException(Exception):
 
 class TingClient():
 	def __init__(self, config, result_queue, flush_to_file):
+		self.config = config
 		self.controller_port = config['ControllerPort']
 		self.socks_port = config['SocksPort']
 		self.destination_port = config['DestinationPort']
@@ -200,10 +201,12 @@ class TingClient():
 	def get_next_pair(self):
 		if self.config['InputFile'] == 'random':
 			x, y = choice(self.relay_list.keys()), choice(self.relay_list.keys())
+			
 			while (x == y):
 				y = choice(self.relay_list.keys())
 			return (x,y)
 		else:
+			
 			try:
 				return self.job_queue.get()
 			except Queue.Empty:
@@ -294,13 +297,15 @@ class TingClient():
 	def run(self):
 
 		consecutive_fails = 0
-
+		
 		for pair in iter(lambda: self.get_next_pair(), ""):
+			
 			self.daily_pairs += 1
 			x, y = pair
 			result = {}
 			result['x'], result['y'] = {}, {}
-
+			print(x)
+			print(y)
 			if "." in x:
 				result['x']['ip'] = x
 				result['x']['fp'] = self.relay_list[x]
@@ -312,7 +317,8 @@ class TingClient():
 				result['y']['fp'] = self.relay_list[y]
 			else:
 				result['y']['fp'] = y
-				result['x']['ip'] = self.fp_to_ip[y]
+				result['y']['ip'] = self.fp_to_ip[y]
+			print(result)
 			pair_fps = (result['x']['fp'],result['y']['fp'])
 			pair_ips = (result['x']['ip'],result['y']['ip'])
 
@@ -394,15 +400,16 @@ def main():
 	config = {}
 	for l in r:
 		pair = l.strip().split()
+		
 		try:
 			config[pair[0]] = int(pair[1])
 		except ValueError:
 			config[pair[0]] = pair[1]
 	if not 'InputFile' in config:
 		config['InputFile'] = None
-
+	
 	arg_overrides = [(args['num_repeats'], 'NumRepeats'), (args['num_samples'], 'NumSamples'), \
-					(args['dest_port'], 'DestinationPort')]
+					(args['dest_port'], 'DestinationPort'), (args['input_file'], 'InputFile'),(args['output_file'], 'OutputFile')]
 
 	for override in arg_overrides:
 		if not override[0] is None:
@@ -416,7 +423,7 @@ def main():
 	else:
 		config['Pair'] = None
 		
-
+	
 	########## CONFIG END ##########
 
 	results_queue = Queue.Queue()

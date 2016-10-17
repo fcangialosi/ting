@@ -2,16 +2,17 @@ AvoidDiskWrites 1
 ControlPort 9251
 CookieAuthentication 1
 LearnCircuitBuildTimeout 0
-DataDirectory ./tor/data/z/
+Nickname torZ
+DataDirectory /home/hammadirl/ting/tor/data/z
 ORPort 9002
 DirReqStatistics 0
 UseMicroDescriptors 0
 DownloadExtraInfo 1
-Log notice file ./tor/logs/z.log
+Log notice file /home/hammadirl/ting/tor/logs/z.log
 SocksListenAddress 127.0.0.1
 SocksPort 9250
 WarnUnsafeSocks 0
-ExitPolicy accept :*
-ExitPolicy reject *:*
+ExitPolicyRejectPrivate 0
+Exitpolicy accept 128.255.44.24:16667, reject *:*
 RunAsDaemon 1
 PublishServerDescriptor 1
