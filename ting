@@ -209,8 +209,10 @@ class TingClient():
 		else:
 			
 			try:
-				return self.job_queue.get()
+				print('test3')
+				return self.job_queue.get(True,5)
 			except Queue.Empty:
+				print('test')
 				return False
 
 	def generate_circuits(self, fps):
@@ -300,7 +302,8 @@ class TingClient():
 		consecutive_fails = 0
 		
 		for pair in iter(lambda: self.get_next_pair(), ""):
-			
+			if pair == False:
+				break
 			self.daily_pairs += 1
 			x, y = pair
 			result = {}
@@ -380,6 +383,7 @@ class TingClient():
 			self.result_queue.put(result, False)
 			self.flush_to_file()
 			self.try_daily_update()
+			print('test2')
 
 		self.controller.close()
 
