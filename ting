@@ -33,6 +33,7 @@ SOCKS_TYPE = socks.PROXY_TYPE_SOCKS5
 RESULT_DIRECTORY = "results"
 EMAIL_ADDR = None # set this to your email address to get email notifications
 
+
 class Color:
     HEADER = '\033[95m'
     BLUE = '\033[94m'
@@ -311,13 +312,19 @@ class TingClient():
 				result['x']['fp'] = self.relay_list[x]
 			else:
 				result['x']['fp'] = x
-				result['x']['ip'] = self.fp_to_ip[x]
+				if x in self.fp_to_ip.keys():
+					result['x']['ip'] = self.fp_to_ip[x]
+				else:
+					result['x']['ip'] = '0.0.0.0'
 			if "." in y:
 				result['y']['ip'] = y
 				result['y']['fp'] = self.relay_list[y]
 			else:
 				result['y']['fp'] = y
-				result['y']['ip'] = self.fp_to_ip[y]
+				if y in self.fp_to_ip.keys():
+					result['y']['ip'] = self.fp_to_ip[y]
+				else:
+					result['y']['ip'] = '0.0.0.0'
 			print(result)
 			pair_fps = (result['x']['fp'],result['y']['fp'])
 			pair_ips = (result['x']['ip'],result['y']['ip'])
@@ -409,7 +416,7 @@ def main():
 		config['InputFile'] = None
 	
 	arg_overrides = [(args['num_repeats'], 'NumRepeats'), (args['num_samples'], 'NumSamples'), \
-					(args['dest_port'], 'DestinationPort'), (args['input_file'], 'InputFile'),(args['output_file'], 'OutputFile')]
+					(args['dest_port'], 'DestinationPort'), (args['input_file'], 'InputFile'),(args['output_file'], 'ResultsDirectory')]
 
 	for override in arg_overrides:
 		if not override[0] is None:
