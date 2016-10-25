@@ -39,7 +39,7 @@ cat <<EOF > ./configs/torrc-client
 AvoidDiskWrites 1
 ControlPort 9051
 CookieAuthentication 1
-Nickname torC
+
 CircuitBuildTimeout 10
 LearnCircuitBuildTimeout 0
 DataDirectory $PWD/data/client
@@ -60,7 +60,7 @@ cat <<EOF > ./configs/torrc-w
 AvoidDiskWrites 1
 ControlPort 9151
 CookieAuthentication 1
-Nickname torW
+
 LearnCircuitBuildTimeout 0
 DataDirectory $PWD/data/w
 ORPort 9001
@@ -82,7 +82,7 @@ AvoidDiskWrites 1
 ControlPort 9251
 CookieAuthentication 1
 LearnCircuitBuildTimeout 0
-Nickname torZ
+
 DataDirectory $PWD/data/z
 ORPort 9002
 DirReqStatistics 0
