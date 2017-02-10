@@ -140,5 +140,3 @@ C $MY_PUBLIC_IP,$FP_C
 SocksTimeout 60
 MaxCircuitBuildAttempts 5
 EOF
-
-./echo_server

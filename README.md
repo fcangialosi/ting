@@ -34,7 +34,6 @@ This will:
   - generate default Tor configuration files 
   - start running the Tor client and servers as daemons
   - generate a default Ting configuration file
-  - start the echo server for Ting to connect to for measurements
 
 If you'd like more control over all of the settings, or run into any issues
 during setup, please check out Section 4, which describes Ting's configuration
@@ -72,16 +71,23 @@ to), you can do the following:
 3 | Using Ting
 ==============
 
+Before running Ting, you must start the echo server so that Ting will have
+something to connect to. To do this simply run:
+
+	./echo_server
+
+It will listen on the port specified by "DestinationPort" in the tingrc file.
+
 Ting has two main modes:
 
-  A. Ting -- use ting much like ping to quickly check the latency between two 
+  A. Single -- use ting much like ping to quickly check the latency between two 
   relays. Relays can be identified by ip or fingerprint. We recommend that you
 	use fingerprints as ips are not necessarily unique.
 
     ./ting [fingerprint1] [fingerprint2] [optional args...]
     ./ting [ip1] [ip2] [optional args...]
 
-  B. Collect -- use Ting to measure the latency between all pairs listed in 
+  B. Pairwise -- use Ting to measure the latency between all pairs listed in 
   an input file. Again these may be specified by fingerprint or ip, but 
 	fingerprint is recommended. 
 
