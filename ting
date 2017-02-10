@@ -183,7 +183,7 @@ class TingClient():
 		self.job_queue = Queue.Queue()
 		if pair:
 			self.job_queue.put(pair)
-			print("Ting mode selected : ({0},{1})".format(pair))
+			print("Ting mode selected : ({0},{1})".format(*pair))
 		elif input_file: 
 			if input_file != "random":
 				try:
@@ -209,10 +209,8 @@ class TingClient():
 		else:
 			
 			try:
-				print('test3')
 				return self.job_queue.get(True,5)
 			except Queue.Empty:
-				print('test')
 				return False
 
 	def generate_circuits(self, fps):
@@ -240,7 +238,7 @@ class TingClient():
 
 		while failures < self.max_circuit_builds:
 			try:
-				log("Building ciruit...")
+				log("Building circuit...")
 				cid = self.controller.new_circuit(circ, await_build = True)
 				success("Circuit built successfully.")
 				return cid
@@ -383,7 +381,6 @@ class TingClient():
 			self.result_queue.put(result, False)
 			self.flush_to_file()
 			self.try_daily_update()
-			print('test2')
 
 		self.controller.close()
 
