@@ -128,7 +128,10 @@ class TingClient():
 		# An event listener, called whenever StreamEvent status changes
 		def probe_stream(event):
 			if event.status == 'DETACHED':
-				warning("Stream Detached from circuit {0}...".format(self.curr_cid))
+				if hasattr(self, 'curr_cid'):
+					warning("Stream Detached from circuit {0}...".format(self.curr_cid))
+				else:
+					warning("Stream Detached from circuit...")
 				print("\t" + str(vars(event)))
 			if event.status == 'NEW' and event.purpose == 'USER':
 				attach_stream(event)
